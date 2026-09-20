@@ -1,2 +1,13 @@
-PySide6
-demucs
+# Runtime dependencies for Splitter Studio.
+#
+# You should not need to run pip yourself - run.command installs these
+# into a local virtual environment the first time you launch the app.
+#
+# demucs brings torch and torchaudio with it, which is most of the
+# roughly 2 GB this downloads.
+
+PySide6>=6.6          # interface
+demucs>=4.0.1         # stem separation
+librosa>=0.10         # BPM detection
+numpy>=1.24           # waveform maths
+Pillow>=10            # waveform images
