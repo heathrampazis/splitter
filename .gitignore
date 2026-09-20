@@ -1,0 +1,43 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# ---- Generated audio output ----
+# Separator writes stems here; large and reproducible.
+output/
+temp/
+
+# Stems, source audio and the exported raw format.
+# Nothing audio should ever land in the repo.
+*.wav
+*.mp3
+*.flac
+*.aif
+*.aiff
+*.m4a
+*.raw
+
+# Generated waveform images and peak data
+waveform_*.png
+peaks.npy
+
+# ---- macOS ----
+.DS_Store
+.AppleDouble
+._*
+
+# ---- Editors ----
+.vscode/
+.idea/
+*.swp
+
+# ---- Logs ----
+*.log
