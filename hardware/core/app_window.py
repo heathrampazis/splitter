@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import QTimer
 
 from audio_engine import AudioEngine
-from gpio import GPIOController, StemEncoder, TempoEncoder
+import controls
 from player_ui import PlayerUI
 from selection_ui import SelectionUI
 from usb_manager import USBManager
@@ -21,46 +21,18 @@ class MainWindow(QMainWindow):
         super().__init__()
 
         self.setWindowTitle("StemDeck")
-        self.setFixedSize(480, 320)
+
+        # Sized for a 5" 800x480 panel, but nothing is pinned to that:
+        # the layout adapts so the same code runs on a 3.5" screen or in
+        # a desktop window while developing.
+        self.resize(800, 480)
+        self.setMinimumSize(480, 320)
 
         # -------------------------------------------------
         # Audio
         # -------------------------------------------------
 
         self.engine = AudioEngine()
-
-        # -------------------------------------------------
-        # GPIO
-        # -------------------------------------------------
-
-        self.gpio = GPIOController(
-            self.engine
-        )
-
-        self.tempo_encoder = TempoEncoder(
-            self
-        )
-
-        self.vocal_encoder = StemEncoder(
-            self,
-            5,
-            6,
-            "vocals"
-        )
-
-        self.drums_encoder = StemEncoder(
-            self,
-            13,
-            19,
-            "drums"
-        )
-
-        self.base_encoder = StemEncoder(
-            self,
-            20,
-            21,
-            "bass_other"
-        )
 
         # -------------------------------------------------
         # State
@@ -107,6 +79,16 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(
             self.pages
         )
+
+        # -------------------------------------------------
+        # Physical controls (optional)
+        # -------------------------------------------------
+
+        # Attached last, because the encoders call back into the pages as
+        # soon as they are turned. Returns None when controls are
+        # disabled or the MIDI library is missing, which is fine for a
+        # touch-only build. The Pico itself can be plugged in any time.
+        self.controls = controls.attach(self)
 
         # -------------------------------------------------
         # Main update timer
@@ -288,6 +270,7 @@ class MainWindow(QMainWindow):
         )
 
         self.player_page.reset_tempo()
+        self.player_page.reset_stems()
 
         self.show_player_page()
 
@@ -295,20 +278,28 @@ class MainWindow(QMainWindow):
     # TEMPO
     # =====================================================
 
-    def change_tempo_encoder(
+    # Moves the tempo by a number of slider units (0.1 % each), starting
+    # from wherever the on-screen slider is now. The slider stays the one
+    # record of the tempo, so the encoder and the touchscreen can be used
+    # in turn without either jumping.
+    def nudge_tempo(
         self,
-        value
+        steps
     ):
 
+        slider = self.player_page.tempo_slider
+
         value = max(
-            -80,
+            slider.minimum(),
             min(
-                80,
-                int(value)
+                slider.maximum(),
+                slider.value() + int(steps)
             )
         )
 
-        self.player_page.tempo_slider.setValue(
+        # Setting the slider calls change_tempo, which updates the
+        # engine and the label.
+        slider.setValue(
             value
         )
 
@@ -331,16 +322,42 @@ class MainWindow(QMainWindow):
     # STEM ENCODERS
     # =====================================================
 
-    def update_stem_slider(
+    # Moves a stem's volume up or down by a fraction of full scale,
+    # starting from the engine's current level. Reading the engine, not
+    # a value remembered by the knob, means a fader moved on screen is
+    # picked up the next time the encoder turns.
+    def nudge_stem(
         self,
         stem,
-        value
+        delta
     ):
 
-        # The physical encoders control the audio engine.
-        # No on-screen stem controls are required.
+        # One encoder drives bass and other together, while the screen
+        # gives them a fader each. Each moves by the same amount from
+        # wherever it is, so a balance set on screen is kept.
+        if stem == "bass_other":
+            targets = ["bass", "other"]
+        else:
+            targets = [stem]
 
-        pass
+        for target in targets:
+            value = max(
+                0.0,
+                min(
+                    1.0,
+                    self.engine.get_volume(target) + delta
+                )
+            )
+
+            self.engine.set_volume(
+                target,
+                value
+            )
+
+            self.player_page.set_stem_value(
+                target,
+                value
+            )
 
     # =====================================================
     # ZOOM
@@ -382,6 +399,12 @@ class MainWindow(QMainWindow):
             self.engine.get_current_bpm()
         )
 
+        # Playback can be started from the screen or from a button, so
+        # the engine is the single source of truth for the label.
+        self.player_page.set_playing(
+            self.engine.playing
+        )
+
         if total > 0:
 
             self.player_page.set_progress(
@@ -396,6 +419,9 @@ class MainWindow(QMainWindow):
         self,
         event
     ):
+
+        if self.controls:
+            self.controls.close()
 
         self.engine.close()
 

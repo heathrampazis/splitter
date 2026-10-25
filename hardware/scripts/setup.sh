@@ -1,23 +1,76 @@
 #!/bin/bash
+#
+# StemDeck setup, for a Raspberry Pi running Raspberry Pi OS (64-bit).
+#
+# Run it from anywhere:
+#
+#   ./scripts/setup.sh            install everything
+#   ./scripts/setup.sh --reset    throw the environment away and rebuild it
+#
+# Installs the system packages, builds a Python environment in
+# hardware/venv and checks the audio output and the Pico controller.
+# It is safe to run again: anything already done is skipped.
+#
+# Afterwards, start the player with ./scripts/run.sh. There is no need
+# to activate the environment yourself - run.sh uses it directly.
 
-set -e
+set -euo pipefail
+
+# Work out where everything is from this script's own location, so it
+# does the same thing whichever folder you run it from.
+SCRIPTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+HARDWARE_DIR="$(dirname "$SCRIPTS_DIR")"
+VENV="$HARDWARE_DIR/venv"
+PY="$VENV/bin/python"
+REQUIREMENTS="$HARDWARE_DIR/requirements.txt"
+
+heading() {
+    printf "\n\033[1m%s\033[0m\n" "$1"
+}
+
+on_error() {
+    echo
+    echo "Setup stopped. The message above explains why."
+}
+
+trap on_error ERR
+
 echo "========================================"
 echo "       StemDeck Setup"
 echo "========================================"
-echo
+echo "Folder: $HARDWARE_DIR"
 
-# CHECK PYTHON
-PYTHON="python3"
-if ! command -v "$PYTHON" >/dev/null 2>&1; then
+# ---- optional reset -----------------------------------------------------
+
+if [ "${1:-}" = "--reset" ]; then
+    heading "Removing the existing environment"
+    rm -rf "$VENV"
+fi
+
+# ---- checks ---------------------------------------------------------------
+
+if ! command -v python3 >/dev/null 2>&1; then
     echo "ERROR: Python 3 is not installed."
     exit 1
 fi
-echo "Python version:"
-"$PYTHON" --version
-echo
 
-# SYSTEM DEPENDENCIES
-echo "Installing system dependencies..."
+echo "Python: $(python3 --version 2>&1)"
+
+# PySide6 only publishes 64-bit ARM builds for Linux. On a 32-bit OS pip
+# fails much later with a confusing "no matching distribution" error.
+ARCH="$(uname -m)"
+
+if [ "$ARCH" != "aarch64" ] && [ "$ARCH" != "x86_64" ]; then
+    echo
+    echo "WARNING: this system is $ARCH."
+    echo "PySide6 needs a 64-bit OS. On a Raspberry Pi, install"
+    echo "Raspberry Pi OS (64-bit) and run this script again."
+fi
+
+# ---- system packages ------------------------------------------------------
+
+heading "Installing system packages"
+
 sudo apt update
 sudo apt install -y \
     python3-venv \
@@ -27,122 +80,100 @@ sudo apt install -y \
     portaudio19-dev \
     libsndfile1 \
     alsa-utils \
-    swig \
-    liblgpio-dev
+    libasound2-dev
 
-# CHECK LGPIO LIBRARY
-echo
-echo "Checking lgpio system library..."
-if ldconfig -p | grep -q "liblgpio"; then
-    echo "liblgpio: OK"
+# ---- Python environment ---------------------------------------------------
+
+heading "Python environment"
+
+if [ ! -x "$PY" ]; then
+    echo "Creating $VENV"
+    python3 -m venv "$VENV"
 else
-    echo "WARNING: liblgpio was not found."
-    echo "The lgpio Python package may not install."
+    echo "Already exists: $VENV"
 fi
 
-# CREATE VIRTUAL ENVIRONMENT
+# Everything below calls the environment's own Python directly, so the
+# environment never needs activating - not here, and not in run.sh.
+
+heading "Installing Python packages"
+echo "PySide6 is large, so the first install takes a few minutes."
 echo
-echo "Creating virtual environment..."
-if [ ! -d "venv" ]; then
-    "$PYTHON" -m venv venv
-else
-    echo "Virtual environment already exists."
-fi
 
-# ACTIVATE VIRTUAL ENVIRONMENT
-echo
-echo "Activating virtual environment..."
-source venv/bin/activate
+"$PY" -m pip install --upgrade pip setuptools wheel --quiet --disable-pip-version-check
+"$PY" -m pip install --disable-pip-version-check -r "$REQUIREMENTS"
 
-# UPDATE PIP
-echo
-echo "Updating pip..."
-python -m pip install \
-    --upgrade \
-    pip \
-    setuptools \
-    wheel
+heading "Checking Python packages"
 
-# INSTALL PYTHON DEPENDENCIES
-echo
-echo "Installing Python dependencies..."
-pip install \
-    -r ../requirements.txt
+"$PY" - <<'PY'
+import importlib
 
-# TEST PYTHON DEPENDENCIES
-echo
-echo "Testing Python dependencies..."
-
-python - <<'PY'
-
-import PySide6
-import gpiozero
-import lgpio
-import sounddevice
-import numpy
-
-print("PySide6: OK")
-print("gpiozero: OK")
-print("lgpio: OK")
-print("sounddevice: OK")
-print("numpy: OK")
-
+for module, name in [
+    ("PySide6", "PySide6"),
+    ("mido", "mido"),
+    ("rtmidi", "python-rtmidi"),
+    ("sounddevice", "sounddevice"),
+    ("numpy", "numpy"),
+]:
+    importlib.import_module(module)
+    print(f"{name}: OK")
 PY
 
-# CHECK ALSA AUDIO
-echo
-echo "Checking audio devices..."
+# ---- audio ----------------------------------------------------------------
+
+heading "Audio devices"
+
 if command -v aplay >/dev/null 2>&1; then
     aplay -l || true
 else
     echo "WARNING: aplay was not found."
 fi
 
-# CHECK USB AUDIO
-echo
-echo "Checking for USB audio..."
-if aplay -l 2>/dev/null | grep -qi "USB Audio"; then
+if aplay -l 2>/dev/null | grep -qi "USB"; then
+    echo
     echo "USB audio device detected."
 else
-    echo "WARNING: USB audio device not detected."
-    echo "This is okay if the USB audio adapter is not currently plugged in."
+    echo
+    echo "WARNING: no USB audio device detected."
+    echo "This is okay if the adapter is not plugged in yet. Without it the"
+    echo "player falls back to the default output, which may be HDMI."
 fi
 
-# TEST SOUNDDEVICE
-echo
-echo "Checking sounddevice..."
-python - <<'PY'
-import sounddevice as sd
-print(sd.query_devices())
+# ---- Pico controller --------------------------------------------------------
+
+heading "Pico controller"
+
+"$PY" - <<'PY'
+import mido
+
+try:
+    names = [n for n in mido.get_input_names() if "through" not in n.lower()]
+except Exception as e:
+    print("WARNING: could not list MIDI devices:", e)
+else:
+    print("MIDI inputs:", ", ".join(names) or "none")
+
+    keywords = ("stemdeck", "circuitpython", "pico")
+
+    if any(k in n.lower() for n in names for k in keywords):
+        print("Pico controller detected.")
+    else:
+        print("WARNING: Pico controller not detected.")
+        print("This is okay if it is not plugged in, or if you are running")
+        print("touch only. The player picks it up whenever it is plugged in.")
 PY
 
-# MAKE RUN SCRIPT EXECUTABLE
-if [ -f "run.sh" ]; then
-    chmod +x run.sh
-    echo
-    echo "run.sh marked as executable."
-fi
+# ---- finish ---------------------------------------------------------------
 
-# FINISHED
+chmod +x "$SCRIPTS_DIR/run.sh" "$SCRIPTS_DIR/setup.sh"
+
+trap - ERR
+
 echo
 echo "========================================"
 echo "       StemDeck Setup Complete"
 echo "========================================"
 echo
-
-echo "Virtual environment:"
-echo "    ./venv"
-
+echo "Start the player with:"
+echo "    $SCRIPTS_DIR/run.sh"
 echo
-
-echo "Run StemDeck with:"
-echo "    ./run.sh"
-
-echo
-
-echo "Or manually:"
-echo "    source venv/bin/activate"
-echo "    python3 main.py"
-
-echo
-echo "========================================"
