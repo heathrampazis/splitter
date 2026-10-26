@@ -11,20 +11,24 @@ libraries are needed. See hardware/README.md for the full steps.
 
 Wiring (physical pin numbers in brackets, see docs/pico-wiring.svg):
 
-    Encoder        C (middle)    A             B
-    Tempo          GND (3)       GP2  (4)      GP3  (5)
-    Vocals         GND (8)       GP6  (9)      GP7  (10)
-    Drums          GND (13)      GP10 (14)     GP11 (15)
-    Bass + other   GND (18)      GP14 (19)     GP15 (20)
+    Encoder board  5V            GND           S1            S2
+    Tempo          GP1  (2)      GND (3)       GP2  (4)      GP3  (5)
+    Vocals         GP5  (7)      GND (8)       GP6  (9)      GP7  (10)
+    Drums          GP9  (12)     GND (13)      GP10 (14)     GP11 (15)
+    Bass + other   GP13 (17)     GND (18)      GP14 (19)     GP15 (20)
+
+The encoder boards' KEY pin (the push switch) is not used.
 
     Button module  +             D             -
     Play / pause   GP16 (21)     GP17 (22)     GND (23)
     Search back    GP20 (26)     GP21 (27)     GND (28)
     Search fwd     GP26 (31)     GP27 (32)     GND (33)
 
-Every wire has a pin of its own. The buttons' + wires go to GPIOs
-rather than a 3.3 V pin so the code can choose what to do with them -
-see "Buttons" below.
+Every wire has a pin of its own. The Pico has a single 3.3 V pin, so
+the encoder boards' 5V pins are powered from GPIOs this code switches
+on to 3.3 V (the boards only hold a few resistors, which work at 3.3 V,
+and the Pico's pins must never see 5 V). The buttons' + wires also go to
+GPIOs, so the code can choose what to do with them - see "Buttons".
 
 Open the Pico's serial console to watch it work: every pin change,
 turn and press is printed.
@@ -69,12 +73,12 @@ DEBUG = True
 # False once everything works.
 DEBUG_PINS = True
 
-# (name, pin A, pin B, MIDI CC number)
+# (name, S1 pin, S2 pin, MIDI CC number, 5V pin)
 ENCODERS = (
-    ("tempo", board.GP2, board.GP3, 1),
-    ("vocals", board.GP6, board.GP7, 2),
-    ("drums", board.GP10, board.GP11, 3),
-    ("bass_other", board.GP14, board.GP15, 4),
+    ("tempo", board.GP2, board.GP3, 1, board.GP1),
+    ("vocals", board.GP6, board.GP7, 2, board.GP5),
+    ("drums", board.GP10, board.GP11, 3, board.GP9),
+    ("bass_other", board.GP14, board.GP15, 4, board.GP13),
 )
 
 # (name, D pin, + pin, MIDI note number)
@@ -180,9 +184,15 @@ def input_pin(pin, pull):
 
 
 class Encoder:
-    def __init__(self, name, pin_a, pin_b, cc):
+    def __init__(self, name, pin_a, pin_b, cc, power_pin):
         self.name = name
         self.cc = cc
+
+        # The board's resistors hold S1 and S2 high from its 5V pin.
+        # Without power on it they link S1 and S2 together instead.
+        self.power = digitalio.DigitalInOut(power_pin)
+        self.power.switch_to_output(value=True)
+
         self.a = input_pin(pin_a, digitalio.Pull.UP)
         self.b = input_pin(pin_b, digitalio.Pull.UP)
         self.state = self.read()
@@ -198,7 +208,7 @@ class Encoder:
             return
 
         if DEBUG_PINS:
-            print(self.name, "A", state >> 1, "B", state & 1)
+            print(self.name, "S1", state >> 1, "S2", state & 1)
 
         self.count += STEP.get((self.state, state), 0)
         self.state = state
@@ -301,14 +311,18 @@ class Button:
 # ---------------------------------------------------------------------
 
 encoders = [Encoder(*spec) for spec in ENCODERS]
+time.sleep(0.005)
+
+for encoder in encoders:
+    encoder.state = encoder.read()
 buttons = [Button(name, pin, power, note) for name, pin, power, note in BUTTONS]
 
 if DEBUG:
     print("StemDeck controls ready")
 
     for encoder in encoders:
-        print(encoder.name, "starts at A", encoder.state >> 1,
-              "B", encoder.state & 1, "(should be A 1 B 1)")
+        print(encoder.name, "starts at S1", encoder.state >> 1,
+              "S2", encoder.state & 1, "(should be S1 1 S2 1)")
 
     for button in buttons:
         print(button.name, "uses", button.mode, "mode, rests at", int(button.rest))
