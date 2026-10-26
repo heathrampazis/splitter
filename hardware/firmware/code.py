@@ -22,21 +22,18 @@ Wiring (physical pin numbers in brackets, see docs/pico-wiring.svg):
     Search back    GP20 (26)     GP21 (27)     GND (28)
     Search fwd     GP26 (31)     GP27 (32)     GND (33)
 
-Every wire has a pin of its own. The Pico has only one 3V3 pin, so each
-button's + is powered from a GPIO that this code switches on to 3.3 V at
-start-up. A module draws well under a milliamp, which a GPIO supplies
-easily.
+Every wire has a pin of its own. The buttons' + wires go to GPIOs
+rather than a 3.3 V pin so the code can choose what to do with them -
+see "Buttons" below.
 
-Each encoder's A and B must be on neighbouring GPIOs: rotaryio uses the
-Pico's PIO hardware, which counts every step without missing one but
-needs the two pins side by side.
+Open the Pico's serial console to watch it work: every pin change,
+turn and press is printed.
 """
 
 import time
 
 import board
 import digitalio
-import rotaryio
 import usb_midi
 
 try:
@@ -52,31 +49,25 @@ except ImportError:
 # matters if the Pico ever shares a USB hub with another controller.
 MIDI_CHANNEL = 0
 
-# Signal changes per click. Most detented encoders make four, which is
-# rotaryio's default. Some make two: if it takes two clicks to move a
-# fader one step, change this to 2.
+# Signal changes per click. Most detented encoders make four. Some make
+# two: if it takes two clicks to move a fader one step, change this to 2.
 ENCODER_DIVISOR = 4
 
 # Encoders that count the wrong way round. Swapping the A and B wires
-# fixes it too, but this saves getting the soldering iron out.
+# fixes it too.
 REVERSED = set()  # for example {"tempo"}
-
-# What the button modules' D pin reads while pressed. Modules differ:
-# some hold D high and pull it low when pressed, others the opposite.
-# "auto" takes whatever D reads at rest as "not pressed", and keeps
-# checking: if a button seems held down for longer than
-# RELEARN_SECONDS, that reading must really be its resting state, and
-# it is treated as such from then on. Set "low" or "high" to fix it.
-BUTTON_ACTIVE = "auto"
-RELEARN_SECONDS = 20.0
 
 # A button must hold steady this long to count, which hides the
 # chatter of the switch contacts.
-DEBOUNCE_SECONDS = 0.015
+DEBOUNCE_SECONDS = 0.02
 
-# Prints every message to the serial console, which is handy while
-# wiring: open the Pico's serial port and turn each knob in turn.
+# Prints turns and presses to the serial console.
 DEBUG = True
+
+# Also prints every raw pin change. Very chatty, but it shows exactly
+# what each wire is doing, which is what you want while wiring. Set to
+# False once everything works.
+DEBUG_PINS = True
 
 # (name, pin A, pin B, MIDI CC number)
 ENCODERS = (
@@ -132,8 +123,7 @@ def send_button(note, pressed):
 # ---------------------------------------------------------------------
 
 # On the Pico 2 W the LED hangs off the wireless chip rather than a
-# normal GPIO. It flashes on every message so you can see the Pico
-# heard a knob even before the Pi is plugged in.
+# normal GPIO. It flashes on every message sent.
 try:
     led = digitalio.DigitalInOut(board.LED)
     led.direction = digitalio.Direction.OUTPUT
@@ -162,91 +152,137 @@ def update_led():
 
 
 # ---------------------------------------------------------------------
-# Hardware
+# Encoders
 # ---------------------------------------------------------------------
 
-encoders = []
-
-for name, pin_a, pin_b, cc in ENCODERS:
-    encoder = rotaryio.IncrementalEncoder(pin_a, pin_b, divisor=ENCODER_DIVISOR)
-    encoders.append([name, encoder, cc, encoder.position])
-
-# Each module's + pin is a GPIO held at 3.3 V. Kept in a list so the
-# pins stay claimed for as long as the code runs.
-button_power = []
-
-for _, _, power_pin, _ in BUTTONS:
-    supply = digitalio.DigitalInOut(power_pin)
-    supply.switch_to_output(value=True)
-    button_power.append(supply)
-
-# Give the modules a moment to settle before reading them.
-time.sleep(0.05)
-
-
-# Reads a button's D pin.
+# Read in software rather than with rotaryio, so the pins' internal
+# pull-ups are definitely on (the encoder's C pin is ground, so A and B
+# need pulling up to read anything) and every pin change can be printed.
 #
-# Each reading claims the pin, reads it and lets it go again, rather
-# than leaving it set up as an input. That works around erratum E9 of
-# the Pico 2's RP2350 chip: a pin left as an input, held low only by a
-# module's weak resistor, can get stuck reading high, so the button
-# appears to press once and then never again.
-def read_pin(pin):
-    reader = digitalio.DigitalInOut(pin)
-    reader.switch_to_input(pull=None)
-    value = reader.value
-    reader.deinit()
-    return value
+# A and B together make a two-bit state that steps round 11 -> 01 -> 00
+# -> 10 -> 11 one way and the opposite order the other way. Each step
+# counts +1 or -1, and a click is counted when the encoder comes back
+# to rest, so a missed step can never leave it out of sync.
+
+STEP = {
+    (0b11, 0b01): 1, (0b01, 0b00): 1, (0b00, 0b10): 1, (0b10, 0b11): 1,
+    (0b11, 0b10): -1, (0b10, 0b00): -1, (0b00, 0b01): -1, (0b01, 0b11): -1,
+}
+
+# Where a detented encoder sits between clicks.
+REST_STATES = (0b11,) if ENCODER_DIVISOR == 4 else (0b11, 0b00)
+
+
+def input_pin(pin, pull):
+    io = digitalio.DigitalInOut(pin)
+    io.switch_to_input(pull=pull)
+    return io
+
+
+class Encoder:
+    def __init__(self, name, pin_a, pin_b, cc):
+        self.name = name
+        self.cc = cc
+        self.a = input_pin(pin_a, digitalio.Pull.UP)
+        self.b = input_pin(pin_b, digitalio.Pull.UP)
+        self.state = self.read()
+        self.count = 0
+
+    def read(self):
+        return (int(self.a.value) << 1) | int(self.b.value)
+
+    def update(self):
+        state = self.read()
+
+        if state == self.state:
+            return
+
+        if DEBUG_PINS:
+            print(self.name, "A", state >> 1, "B", state & 1)
+
+        self.count += STEP.get((self.state, state), 0)
+        self.state = state
+
+        if state in REST_STATES and abs(self.count) >= 2:
+            steps = 1 if self.count > 0 else -1
+            self.count = 0
+
+            if self.name in REVERSED:
+                steps = -steps
+
+            send_turn(self.cc, steps)
+            flash()
+
+            if DEBUG:
+                print(self.name, "+1" if steps > 0 else "-1")
+
+        elif state in REST_STATES:
+            self.count = 0
+
+
+# ---------------------------------------------------------------------
+# Buttons
+# ---------------------------------------------------------------------
+
+# The modules have three pins: D, + and -. How they are wired inside
+# varies, and some have no resistor holding D steady, so D floats and
+# flickers between 0 and 1 on its own.
+#
+# So at start-up each button is tried two ways:
+#
+#   "pull-up": + is switched to ground, making it a second - pin, and D
+#       gets the Pico's own pull-up. D rests at 1 and the switch pulls it
+#       to 0 - whichever of + or - the switch connects D to, as both are
+#       now ground. This suits modules with no resistor of their own.
+#
+#   "module": + is switched on to 3.3 V and D is read as it is. This
+#       suits modules with their own resistor, which shows up as D being
+#       held at 0 in the first test.
 
 
 class Button:
-    def __init__(self, name, pin, note):
+    def __init__(self, name, pin, power_pin, note):
         self.name = name
-        self.pin = pin
         self.note = note
 
-        now = time.monotonic()
-        level = read_pin(pin)
+        self.power = digitalio.DigitalInOut(power_pin)
+        self.power.switch_to_output(value=False)
 
-        # The level that means "not pressed".
-        if BUTTON_ACTIVE == "high":
-            self.rest = False
-        elif BUTTON_ACTIVE == "low":
+        self.io = input_pin(pin, digitalio.Pull.UP)
+        time.sleep(0.005)
+
+        if self.io.value:
+            self.mode = "pull-up"
             self.rest = True
         else:
-            self.rest = level
+            # Something on the module holds D at 0 against the pull-up:
+            # it has its own resistor, so power it and let it drive D.
+            self.mode = "module"
+            self.io.switch_to_input(pull=None)
+            self.power.value = True
+            time.sleep(0.005)
+            self.rest = self.io.value
 
-        self.raw = level            # latest reading
+        now = time.monotonic()
+        level = self.io.value
+        self.raw = level
         self.raw_since = now
-        self.stable = level         # latest reading that held steady
-        self.stable_since = now
+        self.stable = level
         self.pressed = level != self.rest
 
     def update(self, now):
-        level = read_pin(self.pin)
+        level = self.io.value
 
         if level != self.raw:
             self.raw = level
             self.raw_since = now
 
-            if DEBUG:
+            if DEBUG_PINS:
                 print(self.name, "D pin reads", int(level))
 
         if level != self.stable and now - self.raw_since >= DEBOUNCE_SECONDS:
             self.stable = level
-            self.stable_since = now
             self.set_pressed(level != self.rest)
-
-        # Held "down" for ages: the resting level was guessed wrong, for
-        # example because a button was pressed while the Pico started.
-        if (BUTTON_ACTIVE == "auto" and self.pressed
-                and now - self.stable_since >= RELEARN_SECONDS):
-            self.rest = self.stable
-
-            if DEBUG:
-                print(self.name, "now treats", int(self.rest), "as not pressed")
-
-            self.set_pressed(False)
 
     def set_pressed(self, pressed):
         if pressed == self.pressed:
@@ -260,13 +296,22 @@ class Button:
             print(self.name, "pressed" if pressed else "released")
 
 
-buttons = [Button(name, pin, note) for name, pin, _, note in BUTTONS]
+# ---------------------------------------------------------------------
+# Start-up
+# ---------------------------------------------------------------------
+
+encoders = [Encoder(*spec) for spec in ENCODERS]
+buttons = [Button(name, pin, power, note) for name, pin, power, note in BUTTONS]
 
 if DEBUG:
     print("StemDeck controls ready")
 
+    for encoder in encoders:
+        print(encoder.name, "starts at A", encoder.state >> 1,
+              "B", encoder.state & 1, "(should be A 1 B 1)")
+
     for button in buttons:
-        print(button.name, "rests at", int(button.rest))
+        print(button.name, "uses", button.mode, "mode, rests at", int(button.rest))
 
 # ---------------------------------------------------------------------
 # Main loop
@@ -274,22 +319,8 @@ if DEBUG:
 
 
 def tick():
-    for entry in encoders:
-        name, encoder, cc, last = entry
-        position = encoder.position
-        steps = position - last
-
-        if steps:
-            entry[3] = position
-
-            if name in REVERSED:
-                steps = -steps
-
-            send_turn(cc, steps)
-            flash()
-
-            if DEBUG:
-                print(name, "+" if steps > 0 else "-", abs(steps))
+    for encoder in encoders:
+        encoder.update()
 
     now = time.monotonic()
 
@@ -301,8 +332,7 @@ def tick():
 
 while True:
     # An error is printed and the loop carries on, rather than the code
-    # stopping and switching every pin - including the buttons' power -
-    # off.
+    # stopping and switching every pin off.
     try:
         tick()
     except Exception as e:
@@ -316,6 +346,5 @@ while True:
 
         time.sleep(0.5)
 
-    # Fast enough that a quick spin still arrives as a stream of small
-    # steps rather than one big jump, slow enough to leave the CPU idle.
-    time.sleep(0.002)
+    # Short enough to catch every step of a quickly spun encoder.
+    time.sleep(0.001)

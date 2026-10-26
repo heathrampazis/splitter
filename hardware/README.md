@@ -22,6 +22,9 @@ controls do and the two stay in step.
   system default if there isn't one
 - **A USB stick** with tracks on it
 
+A printable case for the 5″ Touch Display 2, the Pi 5, the Pico and the
+controls is in [`case/`](case/).
+
 That is the whole list. Buttons and encoders are optional — see
 [Adding physical controls](#adding-physical-controls-optional).
 
@@ -102,9 +105,16 @@ if you ever need to.)
 The firmware is two files in `firmware/`, written in CircuitPython. No
 extra libraries are needed.
 
-1. Download CircuitPython for the **Raspberry Pi Pico 2 W** from
-   [circuitpython.org](https://circuitpython.org/downloads) — a `.uf2`
-   file.
+1. Download the `.uf2` file from the
+   [Raspberry Pi Pico 2 W page](https://circuitpython.org/board/raspberry_pi_pico2_w/)
+   on circuitpython.org, under the latest stable release. The same file
+   is for the Pico 2 W and the Pico 2 WH — the "H" only means headers
+   are soldered on, so the photo there may show a board without them.
+   The file is named `adafruit-circuitpython-raspberry_pi_pico2_w-…uf2`.
+   Searching that site for "Pico 2 W" also turns up other boards with
+   similar names — the **Zephyr** build (an early test version), the
+   Cytron EDU PICO and Pimoroni's Pico Plus 2 W. None of those are this
+   board.
 2. Hold the **BOOTSEL** button on the Pico while plugging it into a
    computer. A drive called **RP2350** appears.
 3. Drag the `.uf2` file onto it. The Pico restarts and a drive called
@@ -316,10 +326,22 @@ Work through it from the Pico end:
    It should list **StemDeck Controls** (or **CircuitPython** if
    `boot.py` is missing). If nothing is listed, try another cable — many
    micro-USB cables only carry power.
-3. Watch the player's terminal output. It prints
+3. Watch what arrives, without the player running:
+
+   ```bash
+   ./scripts/test_controls.py
+   ```
+
+   It prints every press and turn. If they show up here, the Pico side
+   is fine.
+4. Watch the player's terminal output. It prints
    `Controls: connected to …` when it finds the Pico. If it prints
    `Controls: touch only (ModuleNotFoundError …)`, the MIDI library is
-   missing: run `./scripts/setup.sh` again.
+   missing: run `./scripts/setup.sh` again. That is needed once after
+   updating from a version that used the Pi's GPIO pins.
+5. Test with a knob first. Turning one moves its fader on screen even
+   with no track loaded, while play and search do nothing until a track
+   is loaded from **SONGS**.
 
 **"could not connect to display" or "xcb" errors**
 `run.sh` points the player at the Pi's own screen, but that screen needs
@@ -369,6 +391,7 @@ hardware/
 │   ├── waveform_widget.py scrolling waveform
 │   └── styles.py          palette and stylesheet
 ├── firmware/              CircuitPython for the Pico: boot.py, code.py
+├── case/                  3D-printable case: STL files and the script that makes them
 ├── docs/                  wiring diagram
 ├── scripts/
 │   ├── setup.sh           installs everything, builds venv/
