@@ -1,6 +1,5 @@
 PySide6
-gpiozero
-lgpio
-pydub==0.25.1
+mido
+python-rtmidi
 sounddevice
 numpy

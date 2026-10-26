@@ -38,6 +38,10 @@ class TrackBrowser(QWidget):
             "TRACKS"
         )
 
+        label.setObjectName(
+            "browserTitle"
+        )
+
         label.setAlignment(
             Qt.AlignCenter
         )

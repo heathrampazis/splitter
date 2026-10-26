@@ -54,6 +54,10 @@ class SelectionUI(QWidget):
             "Checking USB..."
         )
 
+        self.usb_label.setObjectName(
+            "usbStatus"
+        )
+
         self.usb_label.setAlignment(
             Qt.AlignCenter
         )
@@ -85,7 +89,7 @@ class SelectionUI(QWidget):
         )
 
         back_button.setFixedHeight(
-            42
+            56
         )
 
         back_button.clicked.connect(
