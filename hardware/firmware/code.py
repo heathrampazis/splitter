@@ -36,9 +36,13 @@ import time
 
 import board
 import digitalio
-import keypad
 import rotaryio
 import usb_midi
+
+try:
+    import traceback
+except ImportError:
+    traceback = None
 
 # ---------------------------------------------------------------------
 # Settings
@@ -58,11 +62,17 @@ ENCODER_DIVISOR = 4
 REVERSED = set()  # for example {"tempo"}
 
 # What the button modules' D pin reads while pressed. Modules differ:
-# some pull D high and press it to ground, others the opposite. "auto"
-# reads the pins at power-up, when nothing is pressed, and takes the
-# other level as "pressed". Set "low" or "high" to fix it instead, for
-# example if you power the Pico up with a finger on a button.
+# some hold D high and pull it low when pressed, others the opposite.
+# "auto" takes whatever D reads at rest as "not pressed", and keeps
+# checking: if a button seems held down for longer than
+# RELEARN_SECONDS, that reading must really be its resting state, and
+# it is treated as such from then on. Set "low" or "high" to fix it.
 BUTTON_ACTIVE = "auto"
+RELEARN_SECONDS = 20.0
+
+# A button must hold steady this long to count, which hides the
+# chatter of the switch contacts.
+DEBOUNCE_SECONDS = 0.015
 
 # Prints every message to the serial console, which is handy while
 # wiring: open the Pico's serial port and turn each knob in turn.
@@ -130,20 +140,25 @@ try:
 except Exception:
     led = None
 
+led_on = False
 led_off_at = 0.0
 
 
 def flash():
-    global led_off_at
+    global led_on, led_off_at
 
     if led is not None:
         led.value = True
+        led_on = True
         led_off_at = time.monotonic() + 0.03
 
 
 def update_led():
-    if led is not None and led.value and time.monotonic() >= led_off_at:
+    global led_on
+
+    if led is not None and led_on and time.monotonic() >= led_off_at:
         led.value = False
+        led_on = False
 
 
 # ---------------------------------------------------------------------
@@ -169,53 +184,96 @@ for _, _, power_pin, _ in BUTTONS:
 time.sleep(0.05)
 
 
-# Works out whether D goes high or low when a button is pressed.
-def detect_pressed_value():
-    if BUTTON_ACTIVE == "high":
-        return True
-
-    if BUTTON_ACTIVE == "low":
-        return False
-
-    idle_high = 0
-
-    for _, pin, _, _ in BUTTONS:
-        reader = digitalio.DigitalInOut(pin)
-        reader.direction = digitalio.Direction.INPUT
-        reader.pull = None
-
-        if reader.value:
-            idle_high += 1
-
-        reader.deinit()
-
-    # Nothing is pressed yet, so pressed is the opposite of idle.
-    return idle_high * 2 <= len(BUTTONS)
+# Reads a button's D pin.
+#
+# Each reading claims the pin, reads it and lets it go again, rather
+# than leaving it set up as an input. That works around erratum E9 of
+# the Pico 2's RP2350 chip: a pin left as an input, held low only by a
+# module's weak resistor, can get stuck reading high, so the button
+# appears to press once and then never again.
+def read_pin(pin):
+    reader = digitalio.DigitalInOut(pin)
+    reader.switch_to_input(pull=None)
+    value = reader.value
+    reader.deinit()
+    return value
 
 
-pressed_value = detect_pressed_value()
+class Button:
+    def __init__(self, name, pin, note):
+        self.name = name
+        self.pin = pin
+        self.note = note
 
-# keypad scans in the background and debounces for us. pull=False
-# because the modules have their own resistor holding D steady; the
-# Pico's internal pull would only fight it.
-buttons = keypad.Keys(
-    tuple(pin for _, pin, _, _ in BUTTONS),
-    value_when_pressed=pressed_value,
-    pull=False,
-    interval=0.01,
-)
+        now = time.monotonic()
+        level = read_pin(pin)
 
-event = keypad.Event()
+        # The level that means "not pressed".
+        if BUTTON_ACTIVE == "high":
+            self.rest = False
+        elif BUTTON_ACTIVE == "low":
+            self.rest = True
+        else:
+            self.rest = level
+
+        self.raw = level            # latest reading
+        self.raw_since = now
+        self.stable = level         # latest reading that held steady
+        self.stable_since = now
+        self.pressed = level != self.rest
+
+    def update(self, now):
+        level = read_pin(self.pin)
+
+        if level != self.raw:
+            self.raw = level
+            self.raw_since = now
+
+            if DEBUG:
+                print(self.name, "D pin reads", int(level))
+
+        if level != self.stable and now - self.raw_since >= DEBOUNCE_SECONDS:
+            self.stable = level
+            self.stable_since = now
+            self.set_pressed(level != self.rest)
+
+        # Held "down" for ages: the resting level was guessed wrong, for
+        # example because a button was pressed while the Pico started.
+        if (BUTTON_ACTIVE == "auto" and self.pressed
+                and now - self.stable_since >= RELEARN_SECONDS):
+            self.rest = self.stable
+
+            if DEBUG:
+                print(self.name, "now treats", int(self.rest), "as not pressed")
+
+            self.set_pressed(False)
+
+    def set_pressed(self, pressed):
+        if pressed == self.pressed:
+            return
+
+        self.pressed = pressed
+        send_button(self.note, pressed)
+        flash()
+
+        if DEBUG:
+            print(self.name, "pressed" if pressed else "released")
+
+
+buttons = [Button(name, pin, note) for name, pin, _, note in BUTTONS]
 
 if DEBUG:
     print("StemDeck controls ready")
-    print("Buttons read", "high" if pressed_value else "low", "when pressed")
+
+    for button in buttons:
+        print(button.name, "rests at", int(button.rest))
 
 # ---------------------------------------------------------------------
 # Main loop
 # ---------------------------------------------------------------------
 
-while True:
+
+def tick():
     for entry in encoders:
         name, encoder, cc, last = entry
         position = encoder.position
@@ -233,15 +291,30 @@ while True:
             if DEBUG:
                 print(name, "+" if steps > 0 else "-", abs(steps))
 
-    while buttons.events.get_into(event):
-        name, _, _, note = BUTTONS[event.key_number]
-        send_button(note, event.pressed)
-        flash()
+    now = time.monotonic()
 
-        if DEBUG:
-            print(name, "pressed" if event.pressed else "released")
+    for button in buttons:
+        button.update(now)
 
     update_led()
+
+
+while True:
+    # An error is printed and the loop carries on, rather than the code
+    # stopping and switching every pin - including the buttons' power -
+    # off.
+    try:
+        tick()
+    except Exception as e:
+        print("Error:", repr(e))
+
+        if traceback is not None:
+            try:
+                traceback.print_exception(e)
+            except Exception:
+                pass
+
+        time.sleep(0.5)
 
     # Fast enough that a quick spin still arrives as a stream of small
     # steps rather than one big jump, slow enough to leave the CPU idle.
