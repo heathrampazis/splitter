@@ -88,6 +88,22 @@ BUTTON_ACTIVE_HIGH = True
 BOUNCE_SECONDS = 0.02
 
 
+PIN_HELP = (
+    "another driver is using that pin. Check /boot/firmware/config.txt "
+    "for dtparam=spi=on or a dtoverlay= line for an old screen, and "
+    "comment it out with #, then reboot")
+
+
+# Turns a gpiozero error into something that says what to do about it.
+def describe(error):
+    text = f"{type(error).__name__}: {error}"
+
+    if "busy" in text.lower() or "in use" in text.lower():
+        return f"{text} ({PIN_HELP})"
+
+    return text
+
+
 class GPIOControls(QObject):
     # Emitted on gpiozero's threads, delivered on the Qt main thread.
     button_changed = Signal(str, bool)
@@ -105,16 +121,31 @@ class GPIOControls(QObject):
         self.button_changed.connect(app.handle_button)
         self.encoder_turned.connect(app.handle_turn)
 
-        for name, (s1, s2, power) in ENCODERS.items():
-            self.add_encoder(name, s1, s2, power)
+        # Each control is set up on its own, so one pin that cannot be
+        # claimed does not take every control after it down too.
+        ready, failed = [], []
 
-        for name, (d_pin, plus_pin) in BUTTONS.items():
-            self.add_button(name, d_pin, plus_pin)
+        controls = (
+            [(name, self.add_encoder, spec) for name, spec in ENCODERS.items()]
+            + [(name, self.add_button, spec) for name, spec in BUTTONS.items()]
+            + [(name, self.add_key, (pin,)) for name, pin in KEYS.items()]
+        )
 
-        for name, pin in KEYS.items():
-            self.add_key(name, pin)
+        for name, add, spec in controls:
+            try:
+                add(name, *spec)
+                ready.append(name)
+            except Exception as e:
+                failed.append(name)
+                print(f"Controls: {name} could not be set up - {describe(e)}")
 
-        print("Controls: GPIO buttons and encoders ready")
+        if not ready:
+            raise RuntimeError("no GPIO control could be set up")
+
+        print("Controls: GPIO ready:", ", ".join(ready))
+
+        if failed:
+            print("Controls: GPIO not working:", ", ".join(failed))
 
     def add_encoder(self, name, s1, s2, power):
         if power is not None:

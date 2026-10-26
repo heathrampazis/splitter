@@ -82,7 +82,8 @@ sudo apt install -y \
     alsa-utils \
     libasound2-dev \
     swig \
-    liblgpio-dev
+    liblgpio-dev \
+    wlr-randr
 
 # ---- Python environment ---------------------------------------------------
 

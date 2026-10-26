@@ -113,17 +113,25 @@ in `core/controls/gpio_controls.py`.
 ## Screen orientation
 
 The 5″ Touch Display 2 is a portrait panel (720 × 1280). The player is
-laid out for landscape, so turn the screen once:
+laid out for landscape, and `run.sh` turns the screen on its side
+automatically each time it starts (with `wlr-randr`), as long as the
+screen is still the right way up — a rotation you chose yourself is
+left alone. If `wlr-randr` is missing, the player turns its own window
+instead, and touches are turned with it.
 
-1. On the Pi's desktop, open **Preferences → Control Centre → Screens**.
-2. Right-click the **DSI-1** screen, choose **Orientation**, then **Left**
-   or **Right** — whichever suits which way up the display sits in the
-   case.
-3. **Apply**, then **OK**. The touch input turns with the picture.
+If the picture comes out upside down for the way the display sits in
+the case, rotate the other way:
 
-The setting is remembered, so this only needs doing once. The player
-then opens full screen and hides the mouse pointer. To keep it in a
-window while debugging on the Pi:
+```bash
+STEMDECK_ROTATION=270 ./scripts/run.sh
+```
+
+To make the turn permanent for the whole desktop, use **Preferences →
+Control Centre → Screens**, right-click **DSI-1**, **Orientation** →
+**Left** or **Right**, then **Apply**. `run.sh` then leaves it alone.
+
+The player opens full screen and hides the mouse pointer. To keep it in
+a window while debugging on the Pi:
 
 ```bash
 STEMDECK_WINDOWED=1 ./scripts/run.sh
@@ -295,15 +303,25 @@ layout.
 **Buttons or encoders do nothing**
 
 1. Run `./scripts/test_controls.py` (with the player closed — two
-   programs cannot use the same pins). If presses and clicks show up
-   there, the wiring is fine.
-2. If an encoder shows nothing: check its header is **soldered**, and
+   programs cannot use the same pins). It first lists every control and
+   whether its pins could be claimed, then prints presses and clicks.
+   If they show up there, the wiring is fine.
+2. A control listed as `FAILED - ... busy` has a pin that another driver
+   already owns. Play (GPIO9/GPIO11) and drums (GPIO8) sit on the SPI
+   pins, so open the config with `sudo nano /boot/firmware/config.txt`,
+   put a `#` in front of `dtparam=spi=on` and any `dtoverlay=` line left
+   over from an old screen, save, and `sudo reboot`.
+3. If an encoder shows nothing: check its header is **soldered**, and
    that its 5V pin is on pin 17 (tempo) or pin 31 (jog).
-3. If a button shows `PRESSED - check its wiring` before you touch it, or
-   flickers on its own: check its + and D wires are not swapped.
-4. Watch the player's terminal output. It prints
-   `Controls: GPIO buttons and encoders ready` on start. If it prints
-   `Controls: no GPIO (…)`, run `./scripts/setup.sh` again.
+4. If a button says `reads PRESSED before touching it`, or flickers on
+   its own: check its D and + wires are not swapped. The module's pins
+   run D, +, − and go on the header in that order (see the table above).
+   After a `git pull`, check the Pi really has the latest version.
+5. Watch the player's terminal output. It prints
+   `Controls: GPIO ready: ...` on start, and
+   `Controls: GPIO not working: ...` for anything that failed, with the
+   reason just above. If it prints `Controls: no GPIO (…)`, run
+   `./scripts/setup.sh` again.
 
 **The picture is sideways, or touches land in the wrong place**
 See [Screen orientation](#screen-orientation).

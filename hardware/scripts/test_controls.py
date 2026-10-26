@@ -37,7 +37,7 @@ except ImportError:
 
 from controls.gpio_controls import (BOUNCE_SECONDS, BUTTON_ACTIVE_HIGH,
                                     BUTTON_MODE, BUTTONS, ENCODERS, KEYS,
-                                    REVERSED)
+                                    REVERSED, describe)
 
 devices = []
 counts = {}
@@ -52,44 +52,64 @@ def report_button(name, pressed):
     print(f"{name:14} {'pressed' if pressed else 'released'}")
 
 
-try:
-    for name, (s1, s2, power) in ENCODERS.items():
-        if power is not None:
-            devices.append(DigitalOutputDevice(power, initial_value=True))
+def setup_encoder(name, s1, s2, power):
+    if power is not None:
+        devices.append(DigitalOutputDevice(power, initial_value=True))
 
-        encoder = RotaryEncoder(s1, s2, max_steps=0)
-        sign = -1 if name in REVERSED else 1
-        encoder.when_rotated_clockwise = lambda n=name, s=sign: report_turn(n, s)
-        encoder.when_rotated_counter_clockwise = lambda n=name, s=sign: report_turn(n, -s)
-        devices.append(encoder)
+    encoder = RotaryEncoder(s1, s2, max_steps=0)
+    sign = -1 if name in REVERSED else 1
+    encoder.when_rotated_clockwise = lambda: report_turn(name, sign)
+    encoder.when_rotated_counter_clockwise = lambda: report_turn(name, -sign)
+    devices.append(encoder)
 
-        print(f"{name:14} encoder on GPIO{s1} and GPIO{s2}")
+    return f"encoder on GPIO{s1} and GPIO{s2}"
 
-    for name, (d_pin, plus_pin) in BUTTONS.items():
-        if BUTTON_MODE == "pull-up":
-            devices.append(DigitalOutputDevice(plus_pin, initial_value=False))
-            button = Button(d_pin, pull_up=True, bounce_time=BOUNCE_SECONDS)
-        else:
-            devices.append(DigitalOutputDevice(plus_pin, initial_value=True))
-            button = Button(d_pin, pull_up=None, active_state=BUTTON_ACTIVE_HIGH,
-                            bounce_time=BOUNCE_SECONDS)
 
-        button.when_pressed = lambda n=name: report_button(n, True)
-        button.when_released = lambda n=name: report_button(n, False)
-        devices.append(button)
+def setup_button(name, d_pin, plus_pin):
+    if BUTTON_MODE == "pull-up":
+        devices.append(DigitalOutputDevice(plus_pin, initial_value=False))
+        button = Button(d_pin, pull_up=True, bounce_time=BOUNCE_SECONDS)
+    else:
+        devices.append(DigitalOutputDevice(plus_pin, initial_value=True))
+        button = Button(d_pin, pull_up=None, active_state=BUTTON_ACTIVE_HIGH,
+                        bounce_time=BOUNCE_SECONDS)
 
-        state = "PRESSED - check its wiring" if button.is_pressed else "up"
-        print(f"{name:14} button on GPIO{d_pin}: {state}")
+    button.when_pressed = lambda: report_button(name, True)
+    button.when_released = lambda: report_button(name, False)
+    devices.append(button)
 
-    for name, pin in KEYS.items():
-        key = Button(pin, pull_up=True, bounce_time=BOUNCE_SECONDS)
-        key.when_pressed = lambda n=name: report_button(n, True)
-        key.when_released = lambda n=name: report_button(n, False)
-        devices.append(key)
+    state = "reads PRESSED before touching it - check its wiring" \
+        if button.is_pressed else "up"
+    return f"button, D on GPIO{d_pin}, + on GPIO{plus_pin}: {state}"
 
-except Exception as e:
-    print("Could not set up the GPIO pins:", e)
-    print("On a Raspberry Pi, run ./scripts/setup.sh, and make sure the")
+
+def setup_key(name, pin):
+    key = Button(pin, pull_up=True, bounce_time=BOUNCE_SECONDS)
+    key.when_pressed = lambda: report_button(name, True)
+    key.when_released = lambda: report_button(name, False)
+    devices.append(key)
+
+    return f"push switch on GPIO{pin}"
+
+
+controls = (
+    [(name, setup_encoder, spec) for name, spec in ENCODERS.items()]
+    + [(name, setup_button, spec) for name, spec in BUTTONS.items()]
+    + [(name, setup_key, (pin,)) for name, pin in KEYS.items()]
+)
+
+working = 0
+
+for name, setup, spec in controls:
+    try:
+        print(f"{name:14} {setup(name, *spec)}")
+        working += 1
+    except Exception as e:
+        print(f"{name:14} FAILED - {describe(e)}")
+
+if not working:
+    print()
+    print("Nothing could be set up. Run ./scripts/setup.sh, and make sure the")
     print("player is not running at the same time.")
     sys.exit(1)
 
