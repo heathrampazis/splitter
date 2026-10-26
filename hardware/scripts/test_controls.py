@@ -1,85 +1,106 @@
 #!/usr/bin/env python3
 """
-Checks the Pico controller on its own, without starting the player.
+Checks the buttons and encoders on their own, without starting the
+player.
 
     ./scripts/test_controls.py
 
-Lists the MIDI devices the Pi can see, opens the Pico, and prints every
-press and turn as it arrives. Press Ctrl+C to stop.
+Sets up the GPIO pins exactly as the player does, then prints every
+press and every click of an encoder as it happens. Press Ctrl+C to stop.
 
-If presses show up here but the player ignores them, the problem is in
-the player. If nothing shows up here, it is the Pico, its cable or the
-MIDI libraries.
+If something shows up here but the player ignores it, the problem is in
+the player. If nothing shows up here, it is the wiring or the soldering.
 """
 
 import os
+import signal
 import sys
 from pathlib import Path
 
 HARDWARE_DIR = Path(__file__).resolve().parent.parent
 VENV = HARDWARE_DIR / "venv"
 
-# Run inside the environment setup.sh built, where mido is installed,
+# Run inside the environment setup.sh built, where gpiozero is installed,
 # even when started as ./scripts/test_controls.py.
 if VENV.exists() and Path(sys.prefix).resolve() != VENV.resolve():
     python = str(VENV / "bin" / "python")
     os.execv(python, [python, *sys.argv])
 
-# Use the player's own settings, so this tests exactly what it uses.
+# Use the player's own wiring table, so this tests exactly what it uses.
 sys.path.insert(0, str(HARDWARE_DIR / "core"))
 
 try:
-    import mido
+    from gpiozero import Button, DigitalOutputDevice, RotaryEncoder
 except ImportError:
-    print("mido is not installed. Run ./scripts/setup.sh again.")
+    print("gpiozero is not installed. Run ./scripts/setup.sh again.")
     sys.exit(1)
 
-from controls.midi_controls import BUTTON_NOTES, ENCODER_CCS, MidiControls
+from controls.gpio_controls import (BOUNCE_SECONDS, BUTTON_ACTIVE_HIGH,
+                                    BUTTON_MODE, BUTTONS, ENCODERS, KEYS,
+                                    REVERSED)
+
+devices = []
+counts = {}
+
+
+def report_turn(name, direction):
+    counts[name] = counts.get(name, 0) + direction
+    print(f"{name:14} {'+1' if direction > 0 else '-1'}   (total {counts[name]:+d})")
+
+
+def report_button(name, pressed):
+    print(f"{name:14} {'pressed' if pressed else 'released'}")
+
 
 try:
-    names = mido.get_input_names()
+    for name, (s1, s2, power) in ENCODERS.items():
+        if power is not None:
+            devices.append(DigitalOutputDevice(power, initial_value=True))
+
+        encoder = RotaryEncoder(s1, s2, max_steps=0)
+        sign = -1 if name in REVERSED else 1
+        encoder.when_rotated_clockwise = lambda n=name, s=sign: report_turn(n, s)
+        encoder.when_rotated_counter_clockwise = lambda n=name, s=sign: report_turn(n, -s)
+        devices.append(encoder)
+
+        print(f"{name:14} encoder on GPIO{s1} and GPIO{s2}")
+
+    for name, (d_pin, plus_pin) in BUTTONS.items():
+        if BUTTON_MODE == "pull-up":
+            devices.append(DigitalOutputDevice(plus_pin, initial_value=False))
+            button = Button(d_pin, pull_up=True, bounce_time=BOUNCE_SECONDS)
+        else:
+            devices.append(DigitalOutputDevice(plus_pin, initial_value=True))
+            button = Button(d_pin, pull_up=None, active_state=BUTTON_ACTIVE_HIGH,
+                            bounce_time=BOUNCE_SECONDS)
+
+        button.when_pressed = lambda n=name: report_button(n, True)
+        button.when_released = lambda n=name: report_button(n, False)
+        devices.append(button)
+
+        state = "PRESSED - check its wiring" if button.is_pressed else "up"
+        print(f"{name:14} button on GPIO{d_pin}: {state}")
+
+    for name, pin in KEYS.items():
+        key = Button(pin, pull_up=True, bounce_time=BOUNCE_SECONDS)
+        key.when_pressed = lambda n=name: report_button(n, True)
+        key.when_released = lambda n=name: report_button(n, False)
+        devices.append(key)
+
 except Exception as e:
-    print("Could not list MIDI devices:", e)
-    print("python-rtmidi is probably missing. Run ./scripts/setup.sh again.")
-    sys.exit(1)
-
-print("MIDI inputs the Pi can see:")
-
-for name in names:
-    print("   ", name)
-
-if not names:
-    print("    (none)")
-
-port_name = MidiControls.find_port(names)
-
-if port_name is None:
-    print()
-    print("The Pico is not among them. Check it is plugged in with a data")
-    print("cable (not charge-only), and that boot.py and code.py are on it.")
+    print("Could not set up the GPIO pins:", e)
+    print("On a Raspberry Pi, run ./scripts/setup.sh, and make sure the")
+    print("player is not running at the same time.")
     sys.exit(1)
 
 print()
-print("Listening to", port_name)
-print("Press buttons and turn knobs. Ctrl+C to stop.")
+print("Press the buttons and turn the knobs. Ctrl+C to stop.")
 print()
 
 try:
-    with mido.open_input(port_name) as port:
-        for message in port:
-            if message.type == "control_change":
-                name = ENCODER_CCS.get(message.control, "unknown CC")
-                value = message.value
-                steps = value if value < 64 else value - 128
-                print(f"{name:15} {steps:+d}   ({message})")
-
-            elif message.type in ("note_on", "note_off"):
-                name = BUTTON_NOTES.get(message.note, "unknown note")
-                pressed = message.type == "note_on" and message.velocity > 0
-                print(f"{name:15} {'pressed' if pressed else 'released':8}   ({message})")
-
-            else:
-                print(message)
-
+    signal.pause()
 except KeyboardInterrupt:
     print()
+finally:
+    for device in devices:
+        device.close()

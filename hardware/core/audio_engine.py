@@ -266,6 +266,26 @@ class AudioEngine:
 
         return current, remaining, total
 
+    # Jumps to a point in the track, in seconds. Used when the waveform
+    # is dragged on screen.
+    def set_position(self, seconds):
+        with self.lock:
+            if self.length <= 0:
+                return
+
+            frame = float(seconds) * self.sample_rate
+            self.position = max(0.0, min(frame, self.length - 1))
+
+    # Moves the play position by a number of seconds, forwards or back.
+    # Used by the jog wheel to cue while paused.
+    def nudge_position(self, seconds):
+        with self.lock:
+            if self.length <= 0:
+                return
+
+            frame = self.position + float(seconds) * self.sample_rate
+            self.position = max(0.0, min(frame, self.length - 1))
+
     def audio_callback(self, outdata, frames, time_info, status):
         output = np.zeros((frames, 2), dtype=np.float32)
 

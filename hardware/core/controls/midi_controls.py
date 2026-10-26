@@ -1,11 +1,10 @@
 """
-Physical controls, arriving as USB MIDI from the Pico.
+Optional controls over USB MIDI.
 
-The buttons and encoders are wired to a Raspberry Pi Pico 2 W running
-the firmware in hardware/firmware/. It plugs into the Pi over USB and
-shows up as a MIDI device, so nothing here knows about pins: it only
-reads MIDI messages. That also means any MIDI controller sending the
-same messages works, which is handy when developing on a laptop.
+The main controls are wired to the Pi's GPIO (see gpio_controls.py).
+This listens for a USB MIDI controller as well, sending the same
+actions, which is handy for testing the player on a laptop with any
+MIDI controller. Nothing needs to be plugged in for the player to work.
 
 Threading: mido delivers messages on its own background thread, and Qt
 widgets must only be touched from the main thread. Every message is
@@ -16,35 +15,29 @@ thread before any handler runs.
 import mido
 from PySide6.QtCore import QObject, QTimer, Signal
 
-# Any MIDI input whose name contains one of these is taken to be the
-# Pico. "StemDeck" is the name boot.py gives it; the others are what it
-# is called if boot.py has not run.
+# MIDI inputs whose name contains one of these are listened to.
+# "StemDeck" and the others match the Pico firmware in hardware/firmware;
+# add your own controller's name here to use it.
 PORT_KEYWORDS = ("stemdeck", "circuitpython", "pico")
 
 # How often to look for the controller being plugged in or pulled out.
 RECONNECT_INTERVAL_MS = 2000
 
-# Must match ENCODERS and BUTTONS in firmware/code.py.
+# Control change numbers for the encoders. Relative values: 1-63 is that
+# many steps clockwise, 65-127 anticlockwise (127 is one step back).
 ENCODER_CCS = {
     1: "tempo",
-    2: "vocals",
-    3: "drums",
-    4: "bass_other",
+    2: "jog",
 }
 
+# Note numbers for the buttons: note on when pressed, note off when
+# released.
 BUTTON_NOTES = {
     60: "play",
-    61: "search_back",
-    62: "search_forward",
+    61: "vocals",
+    62: "drums",
+    63: "instrumental",
 }
-
-# How far one encoder click moves things.
-#   Tempo:  slider units of 0.1 %, so 2 is 0.2 % per click and a full
-#           sweep of +/-8 % takes 80 clicks, about four turns.
-#   Volume: fraction of full scale, so 0.05 is 5 % per click and a
-#           20-click encoder goes from silent to full in one turn.
-TEMPO_STEP = 2
-VOLUME_STEP = 0.05
 
 
 class MidiControls(QObject):
@@ -59,8 +52,8 @@ class MidiControls(QObject):
         self.port = None
         self.port_name = None
 
-        self.encoder_turned.connect(self.handle_encoder)
-        self.button_changed.connect(self.handle_button)
+        self.encoder_turned.connect(app.handle_turn)
+        self.button_changed.connect(app.handle_button)
 
         # The Pico can be plugged in after the player starts, or pulled
         # out mid-set, so keep checking rather than looking once.
@@ -71,7 +64,7 @@ class MidiControls(QObject):
         self.check_connection()
 
         if self.port is None:
-            print("Controls: waiting for the Pico to be plugged in")
+            print("Controls: no MIDI controller plugged in (that is fine)")
 
     # =====================================================
     # CONNECTION
@@ -124,10 +117,9 @@ class MidiControls(QObject):
 
         self.close_port()
 
-        # A search button held at the moment the cable came out would
-        # otherwise never send its release, and the track would keep
-        # scrubbing forever.
-        self.app.engine.stop_search()
+        # A button held at the moment the cable came out would otherwise
+        # never send its release.
+        self.app.release_all()
 
     def close_port(self):
         if self.port is not None:
@@ -167,35 +159,6 @@ class MidiControls(QObject):
             pressed = message.type == "note_on" and message.velocity > 0
 
             self.button_changed.emit(name, pressed)
-
-    # =====================================================
-    # HANDLERS (Qt main thread)
-    # =====================================================
-
-    def handle_encoder(self, name, steps):
-        if name == "tempo":
-            self.app.nudge_tempo(steps * TEMPO_STEP)
-        else:
-            self.app.nudge_stem(name, steps * VOLUME_STEP)
-
-    def handle_button(self, name, pressed):
-        engine = self.app.engine
-
-        if name == "play":
-            if pressed:
-                engine.toggle_play()
-
-        elif name == "search_back":
-            if pressed:
-                engine.start_search(-1)
-            else:
-                engine.stop_search()
-
-        elif name == "search_forward":
-            if pressed:
-                engine.start_search(1)
-            else:
-                engine.stop_search()
 
     # =====================================================
     # CLEANUP

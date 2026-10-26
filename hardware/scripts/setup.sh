@@ -8,7 +8,7 @@
 #   ./scripts/setup.sh --reset    throw the environment away and rebuild it
 #
 # Installs the system packages, builds a Python environment in
-# hardware/venv and checks the audio output and the Pico controller.
+# hardware/venv and checks the audio output and the GPIO controls.
 # It is safe to run again: anything already done is skipped.
 #
 # Afterwards, start the player with ./scripts/run.sh. There is no need
@@ -80,7 +80,9 @@ sudo apt install -y \
     portaudio19-dev \
     libsndfile1 \
     alsa-utils \
-    libasound2-dev
+    libasound2-dev \
+    swig \
+    liblgpio-dev
 
 # ---- Python environment ---------------------------------------------------
 
@@ -110,6 +112,8 @@ import importlib
 
 for module, name in [
     ("PySide6", "PySide6"),
+    ("gpiozero", "gpiozero"),
+    ("lgpio", "lgpio"),
     ("mido", "mido"),
     ("rtmidi", "python-rtmidi"),
     ("sounddevice", "sounddevice"),
@@ -139,28 +143,20 @@ else
     echo "player falls back to the default output, which may be HDMI."
 fi
 
-# ---- Pico controller --------------------------------------------------------
+# ---- GPIO --------------------------------------------------------------
 
-heading "Pico controller"
+heading "GPIO"
 
 "$PY" - <<'PY'
-import mido
-
 try:
-    names = [n for n in mido.get_input_names() if "through" not in n.lower()]
+    from gpiozero import Device
+    from gpiozero.pins.lgpio import LGPIOFactory
+
+    Device.pin_factory = LGPIOFactory()
+    print("GPIO: OK (lgpio)")
 except Exception as e:
-    print("WARNING: could not list MIDI devices:", e)
-else:
-    print("MIDI inputs:", ", ".join(names) or "none")
-
-    keywords = ("stemdeck", "circuitpython", "pico")
-
-    if any(k in n.lower() for n in names for k in keywords):
-        print("Pico controller detected.")
-    else:
-        print("WARNING: Pico controller not detected.")
-        print("This is okay if it is not plugged in, or if you are running")
-        print("touch only. The player picks it up whenever it is plugged in.")
+    print("WARNING: GPIO is not available:", e)
+    print("This is expected on a computer that is not a Raspberry Pi.")
 PY
 
 # ---- finish ---------------------------------------------------------------

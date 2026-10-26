@@ -3,7 +3,7 @@ Palette and stylesheet for the player.
 
 Shares its colours with Splitter Studio on the Mac so the two halves of
 the project look like one product. Everything is sized for fingers: the
-smallest touch target here is 56 px.
+smallest touch target here is 64 px.
 
 Qt stylesheets are not CSS. There is no letter-spacing, no shadow and no
 transition, so anything needing those is handled on the widgets.
@@ -32,16 +32,15 @@ AMBER = "#e0a44c"
 GREEN = "#55c48f"
 RED = "#ea7d70"
 
-# One colour per stem, so a glance at the faders says which is which.
+# One colour per stem group, so a glance says which is which.
 STEM_COLOURS = {
     "vocals": "#3fbbec",
     "drums": "#e0a44c",
-    "bass": "#55c48f",
-    "other": "#a98bd8",
+    "instrumental": "#55c48f",
 }
 
 # Smallest comfortable touch target.
-TOUCH = 56
+TOUCH = 64
 
 
 _TEMPLATE = Template("""
@@ -49,77 +48,91 @@ QWidget {
     background: $ground;
     color: $text;
     font-family: sans-serif;
-    font-size: 14px;
+    font-size: 18px;
 }
 
-/* ---- text ---- */
+/* ---- playback screen: info bar ---- */
+
+QFrame#infoBar, QFrame#statusBar {
+    background: $panel;
+    border: 1px solid $line;
+    border-radius: 12px;
+}
 
 QLabel#songName {
     color: $text;
-    font-size: 20px;
+    font-size: 30px;
     font-weight: 600;
     background: transparent;
 }
 
 QLabel#bpm {
     color: $accent;
-    font-size: 17px;
+    font-size: 44px;
+    font-weight: 700;
+    background: transparent;
+}
+
+QLabel#caption {
+    color: $textFaint;
+    font-size: 15px;
+    font-weight: 600;
+    background: transparent;
+}
+
+QLabel#tempo {
+    color: $text;
+    font-size: 24px;
     font-weight: 600;
     background: transparent;
 }
 
 QLabel#time {
     color: $textDim;
-    font-size: 16px;
+    font-size: 24px;
     background: transparent;
 }
 
-QLabel#stemLabel {
+/* ---- playback screen: status bar ---- */
+
+QLabel#playState {
     color: $textFaint;
-    font-size: 11px;
-    font-weight: 600;
+    font-size: 20px;
+    font-weight: 700;
     background: transparent;
 }
 
-QLabel#stemValue {
-    color: $textDim;
-    font-size: 12px;
-    background: transparent;
+QLabel#playState[state="playing"] {
+    color: $green;
 }
 
-QLabel#tempoValue {
-    color: $text;
-    font-size: 13px;
-    font-weight: 600;
-    background: transparent;
+QLabel#playState[state="paused"] {
+    color: $amber;
 }
 
-QLabel#usbStatus {
-    color: $textDim;
-    font-size: 14px;
-    font-weight: 600;
-    background: transparent;
-    padding: 6px;
-}
-
-QLabel#browserTitle {
+QLabel#stemChip {
     color: $textFaint;
-    font-size: 12px;
-    font-weight: 600;
-    background: transparent;
-}
-
-/* ---- panels ---- */
-
-QFrame#topBar {
-    background: $panel;
-    border-bottom: 1px solid $line;
-}
-
-QFrame#mixer {
-    background: $panel;
-    border: 1px solid $line;
+    background: $ground;
+    border: 2px solid $line;
     border-radius: 10px;
+    font-size: 18px;
+    font-weight: 700;
+    padding: 10px 18px;
+}
+
+QLabel#stemChip[on="true"][stem="vocals"] {
+    color: $vocals;
+    border-color: $vocals;
+}
+
+QLabel#stemChip[on="true"][stem="drums"] {
+    color: $drums;
+    border-color: $drums;
+}
+
+QLabel#stemChip[on="true"][stem="instrumental"] {
+    color: $instrumental;
+    border-color: $instrumental;
 }
 
 /* ---- buttons ---- */
@@ -127,12 +140,12 @@ QFrame#mixer {
 QPushButton {
     background: $panelRaised;
     border: 1px solid $lineBright;
-    border-radius: 8px;
+    border-radius: 10px;
     color: $text;
-    font-size: 14px;
-    font-weight: 600;
+    font-size: 20px;
+    font-weight: 700;
     min-height: ${touch}px;
-    padding: 0 14px;
+    padding: 0 22px;
 }
 
 QPushButton:pressed {
@@ -141,72 +154,45 @@ QPushButton:pressed {
     color: $accent;
 }
 
-QPushButton#playButton {
-    background: $accentDeep;
-    border: 1px solid $accentLine;
-    color: $accent;
-    font-size: 19px;
+QPushButton#songsButton {
+    min-width: 150px;
 }
 
-QPushButton#playButton:pressed {
-    background: $accent;
-    color: $ground;
-}
-
-QPushButton#playButton[playing="true"] {
-    background: $accent;
-    border: 1px solid $accent;
-    color: $ground;
-}
-
-/* ---- faders ---- */
-
-QSlider::groove:vertical {
-    width: 6px;
-    background: $ground;
-    border-radius: 3px;
-}
-
-QSlider::handle:vertical {
-    height: 30px;
-    margin: 0 -15px;
-    border-radius: 7px;
-    background: $textDim;
+QPushButton#zoomButton {
+    background: rgba(24, 28, 33, 210);
     border: 1px solid $lineBright;
+    font-size: 17px;
+    padding: 0 12px;
 }
 
-QSlider::groove:horizontal {
-    height: 6px;
-    background: $ground;
-    border-radius: 3px;
+/* ---- track browser page ---- */
+
+QLabel#usbStatus {
+    color: $textDim;
+    font-size: 18px;
+    font-weight: 600;
+    background: transparent;
+    padding: 6px;
 }
 
-QSlider::handle:horizontal {
-    width: 34px;
-    margin: -14px 0;
-    border-radius: 7px;
-    background: $textDim;
-    border: 1px solid $lineBright;
+QLabel#browserTitle {
+    color: $textFaint;
+    font-size: 15px;
+    font-weight: 600;
+    background: transparent;
 }
-
-QSlider::sub-page:vertical {
-    background: $lineBright;
-    border-radius: 3px;
-}
-
-/* ---- track list ---- */
 
 QListWidget {
     background: $panel;
     border: 1px solid $line;
-    border-radius: 10px;
+    border-radius: 12px;
     color: $text;
-    font-size: 17px;
+    font-size: 22px;
     outline: none;
 }
 
 QListWidget::item {
-    padding: 16px 14px;
+    padding: 18px 16px;
     border-bottom: 1px solid $line;
 }
 
@@ -219,13 +205,13 @@ QListWidget::item:selected {
 
 QScrollBar:vertical {
     background: transparent;
-    width: 12px;
+    width: 14px;
 }
 
 QScrollBar::handle:vertical {
     background: $lineBright;
-    border-radius: 6px;
-    min-height: 50px;
+    border-radius: 7px;
+    min-height: 60px;
 }
 
 QScrollBar::add-line:vertical,
@@ -254,5 +240,9 @@ APP_STYLE = _TEMPLATE.substitute(
     accentDeep=ACCENT_DEEP,
     accentLine=ACCENT_LINE,
     amber=AMBER,
+    green=GREEN,
+    vocals=STEM_COLOURS["vocals"],
+    drums=STEM_COLOURS["drums"],
+    instrumental=STEM_COLOURS["instrumental"],
     touch=TOUCH,
 )
