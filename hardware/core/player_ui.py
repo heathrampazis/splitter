@@ -4,11 +4,11 @@ The playback screen.
 Laid out for the 5" Touch Display 2 turned to landscape (1280 x 720),
 and it scales down for a smaller window while developing.
 
-It only shows what you need to see. Everything you do with your hands
-is on the physical controls - play/pause, the stem buttons, tempo and
-jog - so the screen has no copies of them. The only things to touch
-are the waveform (drag to move through the track), its ZOOM button,
-and SONGS to pick a track.
+It only shows what you need to see. Play/pause and the three stem
+buttons can be tapped on the screen as well as pressed on the hardware;
+both do exactly the same thing. Tempo and jog are only on the knobs.
+The waveform can be dragged to move through the track, ZOOM changes how
+much of it shows, and SONGS picks a track.
 
     +--------------------------------------------------------------+
     | Track name                           BPM 123.0  +0.0%  01:23 |
@@ -17,7 +17,7 @@ and SONGS to pick a track.
     |                     waveform  (drag me)                      |
     |                                                              |
     +--------------------------------------------------------------+
-    | ▶ PLAYING        VOCALS   DRUMS   INSTRUMENTAL      [SONGS]  |
+    | [▶ PLAYING]   [VOCALS] [DRUMS] [INSTRUMENTAL]       [SONGS]  |
     +--------------------------------------------------------------+
 """
 
@@ -35,6 +35,10 @@ STEM_GROUPS = (
     ("drums", "DRUMS"),
     ("instrumental", "INSTRUMENTAL"),
 )
+
+
+# Tallest the waveform gets, in pixels, on the 720-pixel-high screen.
+WAVEFORM_MAX_HEIGHT = 430
 
 
 # A label that shortens long text with "…" instead of pushing the layout.
@@ -89,8 +93,13 @@ class PlayerUI(QWidget):
 
         self.waveform = WaveformWidget()
         self.waveform.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+
+        # Kept a little short of the full height, so the touch buttons
+        # below get room for a finger.
+        self.waveform.setMaximumHeight(WAVEFORM_MAX_HEIGHT)
         layout.addWidget(self.waveform, 1)
 
+        layout.addStretch(0)
         layout.addWidget(self.build_status_bar())
 
     def build_info_bar(self):
@@ -135,17 +144,16 @@ class PlayerUI(QWidget):
         layout.setContentsMargins(14, 8, 8, 8)
         layout.setSpacing(12)
 
-        self.play_state = QLabel("■  STOPPED")
-        self.play_state.setObjectName("playState")
-        self.play_state.setMinimumWidth(170)
+        # Buttons act the moment a finger goes down, like the hardware
+        # ones, rather than on release.
+        self.play_state = self.touch_button("■  STOPPED", "playState", "play")
+        self.play_state.setMinimumWidth(200)
 
         layout.addWidget(self.play_state)
         layout.addStretch(1)
 
         for group, caption in STEM_GROUPS:
-            chip = QLabel(caption)
-            chip.setObjectName("stemChip")
-            chip.setAlignment(Qt.AlignCenter)
+            chip = self.touch_button(caption, "stemChip", group)
             chip.setProperty("stem", group)
             chip.setProperty("on", "true")
 
@@ -161,6 +169,14 @@ class PlayerUI(QWidget):
         layout.addWidget(songs)
 
         return bar
+
+    def touch_button(self, text, object_name, control):
+        button = QPushButton(text)
+        button.setObjectName(object_name)
+        button.setFocusPolicy(Qt.NoFocus)
+        button.pressed.connect(lambda: self.app.handle_button(control, True))
+        button.released.connect(lambda: self.app.handle_button(control, False))
+        return button
 
     # =====================================================
     # DISPLAY

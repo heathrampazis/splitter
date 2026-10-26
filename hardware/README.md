@@ -237,7 +237,7 @@ cd core
 |                                               [ZOOM · ALL]   |
 |                      waveform (drag it)                      |
 +--------------------------------------------------------------+
-| ▶ PLAYING        VOCALS   DRUMS   INSTRUMENTAL      [SONGS]  |
+| [▶ PLAYING]   [VOCALS] [DRUMS] [INSTRUMENTAL]       [SONGS]  |
 +--------------------------------------------------------------+
 ```
 
@@ -250,9 +250,10 @@ cd core
     playhead. Drag left to go forward, right to go back.
 - **ZOOM** — cycles through the three.
 - **SONGS** — the track list. Tap a track to load it.
+- **PLAY / PAUSE** (bottom left) — tap to play or pause, the same as
+  the hardware button.
 - **VOCALS / DRUMS / INSTRUMENTAL** — light up in colour when that stem
-  is on. They show the state of the buttons; they are not buttons
-  themselves.
+  is on. Tap one to switch it, the same as the hardware buttons.
 
 ### The hardware
 

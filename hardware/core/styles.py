@@ -95,44 +95,57 @@ QLabel#time {
 
 /* ---- playback screen: status bar ---- */
 
-QLabel#playState {
+QPushButton#playState {
     color: $textFaint;
+    background: $ground;
+    border: 2px solid $line;
+    border-radius: 10px;
     font-size: 20px;
     font-weight: 700;
-    background: transparent;
+    min-height: 80px;
+    padding: 0 18px;
 }
 
-QLabel#playState[state="playing"] {
+QPushButton#playState[state="playing"] {
     color: $green;
+    border-color: $green;
 }
 
-QLabel#playState[state="paused"] {
+QPushButton#playState[state="paused"] {
     color: $amber;
+    border-color: $amber;
 }
 
-QLabel#stemChip {
+QPushButton#stemChip {
     color: $textFaint;
     background: $ground;
     border: 2px solid $line;
     border-radius: 10px;
     font-size: 18px;
     font-weight: 700;
-    padding: 10px 18px;
+    min-height: 80px;
+    min-width: 130px;
+    padding: 0 18px;
 }
 
-QLabel#stemChip[on="true"][stem="vocals"] {
+QPushButton#stemChip[on="true"][stem="vocals"] {
     color: $vocals;
     border-color: $vocals;
 }
 
-QLabel#stemChip[on="true"][stem="drums"] {
+QPushButton#stemChip[on="true"][stem="drums"] {
     color: $drums;
     border-color: $drums;
 }
 
-QLabel#stemChip[on="true"][stem="instrumental"] {
+QPushButton#stemChip[on="true"][stem="instrumental"] {
     color: $instrumental;
     border-color: $instrumental;
+}
+
+/* A finger on a play or stem button. */
+QPushButton#playState:pressed, QPushButton#stemChip:pressed {
+    background: $panelRaised;
 }
 
 /* ---- buttons ---- */
@@ -156,6 +169,7 @@ QPushButton:pressed {
 
 QPushButton#songsButton {
     min-width: 150px;
+    min-height: 80px;
 }
 
 QPushButton#zoomButton {
