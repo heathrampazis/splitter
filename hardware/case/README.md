@@ -33,19 +33,21 @@ Outside size: **176 × 174 × 52.5 mm**; the screen's glass stands about 1 mm ab
 
 | File                 | Qty | Orientation               | Notes                         |
 |----------------------|-----|---------------------------|-------------------------------|
-| `stl/base.stl`       | 1   | As exported, floor down   | Port openings are open at the top, so no supports |
+| `stl/base.stl`       | 1   | As exported, floor down   | The side opening is open at the top, and the power window is a short bridge, so no supports |
 | `stl/top_panel.stl`  | 1   | As exported, face down    | The lid. The visible face prints on the bed, so it comes out smooth |
+| `stl/encoder_washer.stl` | 2 | As exported, flat       | Goes under each encoder's nut and covers the hole |
 | `stl/jog_knob.stl`   | 1   | As exported, top down     | 46 mm jog wheel with a finger dimple |
 | `stl/tempo_knob.stl` | 1   | As exported, top down     | The groove on the side marks where it points |
-| `stl/button_cap.stl` | 4   | As exported, flange down  |                               |
 
 **Settings:** PLA or PETG, 0.2 mm layers, 3 walls, 15–20 % infill, **no
 supports** for anything. Brim on the base if your printer is prone to
 warping corners.
 
-Print the tempo knob first and try it on an encoder shaft. If it is
-loose or tight, change `SHAFT_D` in `build_case.py` by 0.1 mm and
-rebuild; the jog knob uses the same hole.
+Both knobs have a plain round 6 mm hole that pushes onto the encoders'
+knurled, split shaft; the knurls bite into the plastic and the split
+springs it tight. Print the tempo knob first and try it. If it is loose,
+change `SHAFT_D` in `build_case.py` to 5.8; if it won't go on, 6.2. Then
+rebuild.
 
 `stl/knob.stl`, `stl/screen_frame.stl`, `preview/knob.png` and
 `preview/base.png` are left over from earlier versions and are not used
@@ -68,7 +70,7 @@ any more; delete them.
 
 1. **Pi into the base.** Screw the Pi 5 onto the four posts in the base
    with the M2.5 screws, USB and Ethernet towards the left-hand opening,
-   USB-C and HDMI towards the back opening, GPIO pins towards the front.
+   USB-C towards the small window in the back, GPIO pins towards the front.
 2. **Wire first.** Connect every button and encoder to the Pi with its
    jumper wires, following the [wiring diagram](../docs/pi-wiring.svg),
    and check them with `./scripts/test_controls.py`. It is much easier
@@ -77,24 +79,27 @@ any more; delete them.
    the Pi 5) and its power wires (pins 2 and 6) into the display. Feed
    them down through the screen recess in the lid. Lower the display into
    the recess, glass up, until it sits on the four corner shelves. It is
-   a loose fit on purpose; a dab of hot glue in two corners stops it
+   a loose fit on purpose (1.5 mm spare each side); a dab of hot glue in two corners stops it
    moving. Plug the ribbon and power wires into the Pi.
 4. **Encoders.** Both are the same EC11 "Rotary Encoder Module for
    Arduino". Take the nut and washer off, push the shaft up through its
-   hole from underneath so the board drops between the two rails, and
-   tighten the nut on top. The rails stop the board twisting when you
-   turn the knob. Lay the boards left-right: **tempo with its pins
-   pointing left**, **jog with its pins pointing right**, so neither runs
-   into a button frame or the screen. If the encoder has a small
-   anti-rotation tab next to the bushing, snip it off with side cutters,
-   or it will not sit flat.
-5. **Buttons.** Drop a button cap into each round button hole from
-   underneath, so the stem pokes up through the panel and the flange sits
-   against the underside. Lower a DFR0029 module, switch up, into the
-   frame round the hole, with its cable out through the gap in the frame
-   wall. Push it up until its switch presses the cap's flange, then hot
-   glue the board's edges to the frame walls. Press the cap a few times
-   before the glue sets to check it clicks.
+   hole from underneath so the round board drops between the two rails,
+   put a printed washer over the shaft on top of the lid, and tighten the
+   nut on it. The holes are 14 mm, deliberately loose; the 21 mm washer
+   hides the gap. Lay the boards left-right: **tempo with its pins
+   pointing left**, **jog with its pins pointing right**. If the encoder
+   has a small anti-rotation tab next to the bushing, snip it off with
+   side cutters, or it will not sit flat.
+5. **Buttons.** These are DFRobot Digital Push Button V2 modules, and
+   their own coloured caps are the buttons - nothing to print. Push each
+   module up into the frame under its hole, cap first, with the
+   white plug towards the gap in the frame wall (towards the back, or to
+   the right for play). Push it up until the cap stands about
+   3 mm above the lid, so it is easy to press but its collar is still
+   just below the surface, then hot glue the board's edges to the frame
+   walls. The board ends up about 6.5 mm under the lid, and the side
+   plug (about 5 mm tall) still clears it. Press the button a few times
+   before the glue sets to check it clicks and doesn't rub the hole.
 6. **Tidy the wires.** Bundle the jumper wires with a cable tie or a dab
    of glue so they don't catch on the encoders or the Pi's fan.
 7. **Close it up.** Lower the lid onto the base — the lip on its
@@ -105,8 +110,9 @@ any more; delete them.
    front and the small one onto tempo, flat side matching. If your
    encoders came with knobs, you can use one of those for tempo instead.
 
-Power and the USB stick go in through the openings in the back and
-sides.
+The USB stick goes in through the opening in the left side, and the
+power cable through the small window in the back. The back is otherwise
+closed, so the Pi's micro HDMI ports are covered - they aren't used.
 
 ![Base with the Pi](preview/base_with_pi.png)
 
@@ -123,9 +129,12 @@ or calipers before printing saves a reprint:
 | Display, front to back             | `SCREEN_D`                        | 91.5 mm    |
 | Display glass part, front to back of its edge | `SCREEN_SINK` sets how deep it sits | sits 5.5 mm down |
 | Button module board                | `MODULE_W`, `MODULE_L`            | 22 × 30 mm (DFR0029) |
-| Encoder board width                | `ENC_BOARD_W`                     | rails take boards up to 22.5 mm wide |
-| Encoder bushing diameter           | `ENCODER_HOLE`                    | 9.0 mm hole for M7 |
-| Encoder shaft                      | `SHAFT_D`, `SHAFT_FLAT`           | 6 mm D shaft |
+| Encoder board, across              | `ENC_BOARD_W`                     | rails take boards up to 28 mm across |
+| Encoder threaded neck              | `ENCODER_HOLE`                    | 14 mm hole for the M7 neck, covered by the 21 mm printed washer |
+| Encoder thread above the lid       | `WASHER_T`                        | washer is 1.5 mm, so the nut needs about 4 mm of thread |
+| Encoder shaft                      | `SHAFT_D`                         | 6 mm knurled, split; knob hole 6.0 mm |
+| DFR0029 yellow cap                 | `BUTTON_HOLE`                     | 16.5 mm hole for the 12.5 mm collar |
+| DFR0029 switch position            | `SWITCH_OFFSET`                   | 3.2 mm from the board's middle, away from the plug |
 
 The screen rests on four triangular corner shelves, 14 mm along each
 edge (`CORNER_SHELF`), so the middle of its back is free. It is 16 mm
@@ -138,11 +147,13 @@ the glass sits too low or too high, change `SCREEN_SINK`.
 PLA is stiffer than PETG; PETG clips more forgivingly.
 
 The port openings are generous. If a plug still fouls, widen
-`BACK_NOTCH_X` or `LEFT_NOTCH_Y`, or move the Pi with `PI_X` and `PI_Y`.
+`POWER_HOLE_W` or `LEFT_NOTCH_Y`, or move the Pi with `PI_X` and `PI_Y`.
 
-The button caps only need to reach the switch: if a DFR0029's own cap
-already pokes through the 14.5 mm hole, you can leave the printed cap out
-and glue the module so its own cap stands proud.
+There is deliberately some play everywhere: 1.5 mm round the screen in
+its recess, 16.5 mm button holes round the 12.5 mm caps, 1 mm round
+each button board in its frame, and 14 mm encoder holes under 21 mm
+washers. A little of the boards may show
+through the gaps; that is expected.
 
 ---
 
