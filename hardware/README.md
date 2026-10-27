@@ -27,9 +27,9 @@ which you drag with a finger to move through the track.
 - Female-to-female jumper wires
 - **A USB stick** with tracks on it
 
-A printable case is in [`case/`](case/). It was drawn for the earlier
-layout of four knobs and three buttons, so its panel holes need updating
-for this one.
+A printable case for all of this — screen, Pi, four buttons and two
+encoders — is in [`case/`](case/), with print settings and assembly
+steps.
 
 ---
 
@@ -366,7 +366,6 @@ with `free -h` while a track loads.
   `./scripts/run.sh` after logging in.
 - Tempo changes pitch along with speed, like a turntable. There is no
   key lock.
-- The case in `case/` still has the earlier panel layout.
 
 ---
 
@@ -393,7 +392,7 @@ hardware/
 │   ├── setup.sh           installs everything, builds venv/
 │   ├── run.sh             starts the player
 │   └── test_controls.py   checks the wiring without the player
-├── case/                  3D-printable case (earlier layout)
+├── case/                  3D-printable case
 ├── firmware/              earlier Pico version of the controls (unused)
 └── venv/                  Python environment, made by setup.sh (not in git)
 ```

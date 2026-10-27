@@ -5,10 +5,12 @@ StemDeck case - generates printable STL files.
 
 Needs only numpy. Writes these into stl/ next to this file:
 
-    base.stl          open box: Pico mount, vents, port notches
-    top_panel.stl     screen, knobs and buttons (prints face down)
-    knob.stl          print 4
-    button_cap.stl    print 3
+    base.stl          open box: Pi 5 mount, vents and port openings
+    top_panel.stl     the lid: screen recess, encoders and buttons; clips
+                      onto the base (prints face down)
+    tempo_knob.stl    print 1
+    jog_knob.stl      print 1, the big one
+    button_cap.stl    print 4
 
 Every measurement lives in the SETTINGS section below. Change a number,
 run the script again, and re-slice. Units are millimetres.
@@ -34,77 +36,137 @@ import numpy as np
 
 CASE_W = 176.0        # left to right
 CASE_D = 174.0        # front to back
-CASE_H = 56.0         # base height, floor bottom to wall top
+CASE_H = 50.0         # base height, floor bottom to wall top
 WALL = 2.4            # wall thickness
 FLOOR = 2.4           # floor thickness
 PANEL = 2.5           # top panel thickness. EC11 bushings are short,
                       # so keep this at 2.5 or less for the nut to bite.
 
 # --- Screen: Raspberry Pi Touch Display 2, 5 inch ----------------------
+#
+# The screen drops into a recess in the lid, glass up, and rests on four
+# small corner shelves under it. Its back (the board and standoffs)
+# hangs into the box. Only the ribbon and the power wires go down to the
+# Pi, which has its own place on the floor.
+# Official size: 143.5 x 91.5 mm, 16 mm deep, viewing area 111.5 x 63.
 
-SCREEN_W = 143.5      # glass outline, left to right
-SCREEN_D = 91.5       # glass outline, front to back
-SCREEN_FIT = 0.6      # gap around the glass in the pocket, each side
-SCREEN_LIP = 4.0      # how far the panel overlaps the glass edge.
-                      # The window stays bigger than the 111.5 x 63 mm
-                      # viewing area even if that is off-centre.
-SCREEN_Y = 72.0       # front edge of the screen pocket, from case front
-FRAME_WALL = 2.0      # walls that locate the screen under the panel
-FRAME_DEPTH = 8.0     # how far those walls hang down
+SCREEN_W = 143.5      # outline, left to right
+SCREEN_D = 91.5       # outline, front to back
+SCREEN_FIT = 0.8      # gap round the screen in its recess, each side
+SCREEN_Y = 72.0       # front edge of the recess, from case front
+SCREEN_SINK = 5.5     # how far the screen sits down into the lid; the
+                      # glass part is about 6.6 mm thick, so it stands
+                      # about 1 mm proud
+RECESS_WALL = 2.0     # walls of the recess, under the lid
+CORNER_SHELF = 14.0   # the corner shelves the screen rests on (each leg)
+SHELF_THICK = 1.6
 
 # --- Controls ------------------------------------------------------------
+#
+# Seen from above, front edge at the bottom:
+#
+#   +--------------------------------------------+
+#   |                                            |
+#   |               screen (landscape)           |
+#   |                                            |
+#   |  [VOCALS] [DRUMS] [INSTR]          (TEMPO) |
+#   |                                            |
+#   |  [PLAY]                  (( JOG ))         |
+#   +--------------------------------------------+
+#
+# Positions are the centre of each hole, measured from the case's front
+# left corner.
 
-ENCODER_HOLE = 7.4    # EC11 has an M7 bushing
-ENCODER_Y = 50.0
-ENCODER_X = (28.0, 68.0, 108.0, 148.0)   # vocals, drums, bass+other, tempo
+ENCODER_HOLE = 8.0    # the encoder boards' EC11 has an M7 bushing; 1 mm spare
+ENCODERS = {"tempo": (150.0, 52.0), "jog": (118.0, 25.0)}
 
-BUTTON_HOLE = 13.0    # the printed cap's stem is 12.2
-BUTTON_Y = 20.0
-BUTTON_X = (34.0, 108.0, 148.0)          # play, search back, search fwd
+BUTTON_HOLE = 14.0    # the printed cap's stem is 12.2; the flange (17) still covers it
+BUTTONS = {
+    "play": (30.0, 21.0),
+    "vocals": (30.0, 52.0),
+    "drums": (62.0, 52.0),
+    "instrumental": (94.0, 52.0),
+}
+
+# --- DFRobot DFR0029 button modules ----------------------------------------
+# A shallow open frame under each button hole. The module's board drops
+# into it and is hot glued to the frame walls at whatever height puts its
+# switch against the cap. A gap in one wall lets the cable out.
+
+MODULE_W = 22.0       # board size
+MODULE_L = 30.0
+MODULE_FIT = 0.8      # gap around the board, each side
+MODULE_WALL = 1.6
+MODULE_DEPTH = 10.0   # how far the frame hangs below the panel
+MODULE_GAP = 11.0     # width of the cable gap
+# Which way each board's long side runs ("x" or "y"); play lies
+# sideways so it clears the vocals board above it.
+MODULE_ALONG = {"play": "x", "vocals": "y", "drums": "y", "instrumental": "y"}
 
 # --- Panel fixing ----------------------------------------------------------
 
-SCREW_INSET = 6.0     # corner screw centres, from the outside edges
-SCREW_HOLE = 3.4      # clearance for M3 in the panel
-PILOT_HOLE = 2.6      # M3 self-tapping into the base posts
-POST_RADIUS = 4.0     # corner posts in the base
+# --- Clip-on lid ------------------------------------------------------------
+#
+# The lid has a lip all round its underside that fits just inside the
+# base's walls. Small bumps on the lip click under matching ridges on
+# the inside of the walls. No screws. To open it, lift at the finger
+# notch in the front wall.
+
 LIP_FIT = 0.4         # gap between the panel's locating lip and walls
-LIP_THICK = 1.6
-LIP_DEPTH = 3.0
+LIP_THICK = 1.4       # thin enough to flex as it clips in
+LIP_DEPTH = 10.0      # how far the lip reaches down inside the walls
+SNAP = 0.5            # how far each ridge and bump sticks out
+SNAP_Z = 6.5          # ridge height below the top of the walls
+# Where the ridges run along each wall (they skip the port openings).
+SNAPS = {
+    "front": (30.0, CASE_W - 30.0),
+    "back": (108.0, CASE_W - 14.0),
+    "left": (14.0, 96.0),
+    "right": (30.0, CASE_D - 30.0),
+}
+FINGER_NOTCH = (24.0, 3.0)   # width and depth, top of the front wall
 
-# --- Port notches (open at the top, so no bridging when printing) --------
-# The Pi hangs under the screen, so its ports are at the back half of the
-# box. Notches are generous because the Pi's exact position depends on
-# how it sits on the display's standoffs - widen them if a plug fouls.
+# --- Raspberry Pi 5 on the floor ------------------------------------------
+#
+# Under the screen, at the back left, turned so the USB-C and HDMI ports
+# face the back wall, USB-A and Ethernet face the left wall, and the GPIO
+# header faces the front, towards the buttons and encoders.
 
-NOTCH_BOTTOM = 8.0                       # notch floor height above z=0
-BACK_NOTCH_X = (30.0, 146.0)             # back wall: USB-C power, HDMI
-SIDE_NOTCH_Y = (88.0, 160.0)             # both side walls: USB-A, Ethernet
+PI_W = 85.0           # board, left to right (USB end on the left)
+PI_D = 56.0           # board, front to back
+PI_X = 12.0           # board's left edge, from the case's left edge
+PI_Y = 106.0          # board's front edge, from the case front
+PI_STANDOFF = 5.0     # height of the posts under the board
+PI_POST_D = 6.0
+PI_PILOT = 2.2        # for the M2.5 screws that came with the display
+# Mounting holes, measured from the board's corner at the end away from
+# the USB ports.
+PI_HOLES = ((3.5, 3.5), (61.5, 3.5), (3.5, 52.5), (61.5, 52.5))
 
-# --- Raspberry Pi Pico 2 WH mount ------------------------------------------
+# --- Port openings (open at the top, so no bridging when printing) -------
 
-PICO_X = 88.0         # board centre
-PICO_Y = 40.0
-PICO_HOLES_X = 11.4   # hole spacing across the board
-PICO_HOLES_Y = 47.0   # hole spacing along the board
-PICO_STANDOFF = 4.0   # height of the pads under the board
-PICO_PEG = 1.9        # pegs go through the Pico's 2.1 mm holes
+NOTCH_BOTTOM = FLOOR + PI_STANDOFF - 0.5    # just under the board
+BACK_NOTCH_X = (PI_X + 30.0, PI_X + PI_W + 3.0)   # USB-C power, micro HDMI
+LEFT_NOTCH_Y = (PI_Y - 2.0, PI_Y + PI_D + 2.0)    # USB-A, Ethernet
 
 # --- Vents under the Pi ------------------------------------------------------
 
-VENT_Y = (88.0, 156.0)
-VENT_X_SPAN = 100.0
+VENT_Y = (PI_Y + 8.0, PI_Y + PI_D - 8.0)
+VENT_X = (PI_X + 10.0, PI_X + PI_W - 10.0)
 VENT_SLOT = 3.0
 VENT_PITCH = 8.0
 
-# --- Knob (EC11 D shaft: 6 mm, flat leaves 4.5 mm) ---------------------------
+# --- Knobs (EC11 D shaft: 6 mm, flat leaves 4.5 mm) -------------------------
 
-KNOB_D = 22.0
-KNOB_H = 16.0
+# name: (diameter, height, flutes)
+KNOBS = {
+    "tempo": (22.0, 16.0, 20),
+    "jog": (46.0, 14.0, 48),
+}
 KNOB_TOP = 3.0        # solid top
-SHAFT_D = 6.15
+SHAFT_D = 6.3 
 SHAFT_FLAT = 1.6      # flat's distance from the shaft centre
-KNOB_FLUTES = 20
+JOG_DIMPLE = 7.0      # finger dimple near the jog wheel's edge
 
 # --- Button cap ---------------------------------------------------------
 
@@ -308,11 +370,6 @@ YZ_WALL = [[0, 0, 1], [1, 0, 0], [0, 1, 0]]     # u->y, v->z, w->x
 # =====================================================================
 
 
-def corner_points():
-    s = SCREW_INSET
-    return [(s, s), (CASE_W - s, s), (s, CASE_D - s), (CASE_W - s, CASE_D - s)]
-
-
 def screen_centre():
     pocket_d = SCREEN_D + 2 * SCREEN_FIT
     return CASE_W / 2, SCREEN_Y + pocket_d / 2
@@ -324,17 +381,21 @@ def build_base():
 
     # Floor, with vent slots under the Pi.
     vents = []
-    x = W / 2 - VENT_X_SPAN / 2
+    x = VENT_X[0]
 
-    while x + VENT_SLOT <= W / 2 + VENT_X_SPAN / 2 + 1e-9:
+    while x + VENT_SLOT <= VENT_X[1] + 1e-9:
         vents.append(rounded_rect(x, VENT_Y[0], x + VENT_SLOT, VENT_Y[1],
                                   VENT_SLOT / 2 - 0.01, n=4))
         x += VENT_PITCH
 
     parts.append(prism([rect(0, 0, W, D)] + vents, 0, FLOOR))
 
-    # Front wall: plain.
-    parts.append(place(extrude([rect(0, 0, W, H)], WALL), XZ_WALL, (0, 0, 0)))
+    # Front wall: a finger notch in the top edge, to lift the lid.
+    fw, fd = FINGER_NOTCH
+    front = [(0, 0), (W, 0), (W, H), (W / 2 + fw / 2, H),
+             (W / 2 + fw / 2 - fd, H - fd), (W / 2 - fw / 2 + fd, H - fd),
+             (W / 2 - fw / 2, H), (0, H)]
+    parts.append(place(extrude([front], WALL), XZ_WALL, (0, 0, 0)))
 
     # Back wall: notch for the Pi's power and HDMI.
     n0, n1 = BACK_NOTCH_X
@@ -342,29 +403,51 @@ def build_base():
             (n0, NOTCH_BOTTOM), (n0, H), (0, H)]
     parts.append(place(extrude([back], WALL), XZ_WALL, (0, D - WALL, 0)))
 
-    # Side walls: notch for USB-A and Ethernet, whichever side they face.
-    s0, s1 = SIDE_NOTCH_Y
-    side = [(0, 0), (D, 0), (D, H), (s1, H), (s1, NOTCH_BOTTOM),
+    # Left wall: notch for USB-A and Ethernet. Right wall: plain.
+    s0, s1 = LEFT_NOTCH_Y
+    left = [(0, 0), (D, 0), (D, H), (s1, H), (s1, NOTCH_BOTTOM),
             (s0, NOTCH_BOTTOM), (s0, H), (0, H)]
-    parts.append(place(extrude([side], WALL), YZ_WALL, (0, 0, 0)))
-    parts.append(place(extrude([side], WALL), YZ_WALL, (W - WALL, 0, 0)))
+    parts.append(place(extrude([left], WALL), YZ_WALL, (0, 0, 0)))
+    parts.append(place(extrude([rect(0, 0, D, H)], WALL), YZ_WALL, (W - WALL, 0, 0)))
 
-    # Corner posts for the panel screws. They touch the walls so they
-    # print as part of them.
-    for cx, cy in corner_points():
-        parts.append(prism([circle(cx, cy, POST_RADIUS),
-                            circle(cx, cy, PILOT_HOLE / 2, 24)], 0, H))
+    # Ridges on the inside of the walls that the lid's bumps clip under.
+    # Sloped top and bottom, so they print without supports and the lid
+    # slides over them.
+    zr = H - SNAP_Z
+    ridge = [(WALL - 0.2, zr - 1.0), (WALL + SNAP, zr - 0.3),
+             (WALL + SNAP, zr + 0.2), (WALL - 0.2, zr + 0.9)]
 
-    # Pico pads and pegs.
-    for dx in (-PICO_HOLES_X / 2, PICO_HOLES_X / 2):
-        for dy in (-PICO_HOLES_Y / 2, PICO_HOLES_Y / 2):
-            cx, cy = PICO_X + dx, PICO_Y + dy
-            top = FLOOR + PICO_STANDOFF
-            parts.append(prism([circle(cx, cy, 2.5, 32)], FLOOR - 0.2, top))
-            parts.append(prism([circle(cx, cy, PICO_PEG / 2, 16)],
-                               top - 0.2, top + 3.0))
+    for side, (a0, a1) in SNAPS.items():
+        parts.append(wall_strip(side, ridge, a0, a1))
+
+    # Posts for the Pi. Its USB end is on the left, so the holes are
+    # measured from the right-hand end of the board.
+    for hx, hy in pi_holes():
+        parts.append(prism([circle(hx, hy, PI_POST_D / 2, 32),
+                            circle(hx, hy, PI_PILOT / 2, 24)],
+                           FLOOR - 0.2, FLOOR + PI_STANDOFF))
 
     return np.concatenate(parts)
+
+
+def wall_strip(side, profile, a0, a1):
+    """A strip along the inside of one wall, from a0 to a1 along it.
+
+    profile is drawn as (distance in from the outside face, height).
+    """
+    W, D = CASE_W, CASE_D
+
+    if side in ("front", "back"):
+        pts = [(d if side == "front" else D - d, z) for d, z in profile]
+        return place(extrude([pts], a1 - a0), YZ_WALL, (a0, 0, 0))
+
+    pts = [(d if side == "left" else W - d, z) for d, z in profile]
+    return place(extrude([pts], a1 - a0), XZ_WALL, (0, a0, 0))
+
+
+def pi_holes():
+    right = PI_X + PI_W
+    return [(right - dx, PI_Y + dy) for dx, dy in PI_HOLES]
 
 
 def build_panel():
@@ -376,31 +459,40 @@ def build_panel():
     sx, sy = screen_centre()
     pocket_w = SCREEN_W + 2 * SCREEN_FIT
     pocket_d = SCREEN_D + 2 * SCREEN_FIT
-    win_w = SCREEN_W - 2 * SCREEN_LIP
-    win_d = SCREEN_D - 2 * SCREEN_LIP
+    px0, px1 = sx - pocket_w / 2, sx + pocket_w / 2
+    py0, py1 = sy - pocket_d / 2, sy + pocket_d / 2
 
-    holes = [rounded_rect(sx - win_w / 2, sy - win_d / 2,
-                          sx + win_w / 2, sy + win_d / 2, 3.0)]
-    holes += [circle(x, ENCODER_Y, ENCODER_HOLE / 2) for x in ENCODER_X]
-    holes += [circle(x, BUTTON_Y, BUTTON_HOLE / 2) for x in BUTTON_X]
-    holes += [circle(x, y, SCREW_HOLE / 2, 32) for x, y in corner_points()]
+    holes = [rect(px0, py0, px1, py1)]
+    holes += [circle(x, y, ENCODER_HOLE / 2) for x, y in ENCODERS.values()]
+    holes += [circle(x, y, BUTTON_HOLE / 2) for x, y in BUTTONS.values()]
 
     parts.append(prism([rect(0, 0, W, D)] + holes, H, top))
 
-    # Frame that locates the screen. It reaches 0.5 mm into the panel so
-    # the two merge cleanly.
-    fw = FRAME_WALL
-    frame_outer = rect(sx - pocket_w / 2 - fw, sy - pocket_d / 2 - fw,
-                       sx + pocket_w / 2 + fw, sy + pocket_d / 2 + fw)
-    frame_inner = rect(sx - pocket_w / 2, sy - pocket_d / 2,
-                       sx + pocket_w / 2, sy + pocket_d / 2)
-    parts.append(prism([frame_outer, frame_inner], H - FRAME_DEPTH, H + 0.5))
+    # The screen recess: walls hanging under the opening, with a shelf in
+    # each corner for the screen to rest on. The shelves span the corner
+    # between two walls, so they print as short bridges.
+    shelf_top = top - SCREEN_SINK
+    z0 = shelf_top - SHELF_THICK
+    t = RECESS_WALL
+    parts.append(prism([rect(px0 - t, py0 - t, px1 + t, py1 + t),
+                        rect(px0, py0, px1, py1)], z0, H + 0.5))
 
-    # Locating lip just inside the walls, stopping short of the corner
-    # posts.
+    c = CORNER_SHELF
+    for (cx, cy, dx, dy) in ((px0, py0, 1, 1), (px1, py0, -1, 1),
+                             (px0, py1, 1, -1), (px1, py1, -1, -1)):
+        tri = [(cx - dx * 0.5, cy - dy * 0.5), (cx + dx * c, cy - dy * 0.5),
+               (cx - dx * 0.5, cy + dy * c)]
+        parts.append(prism([tri], z0, shelf_top))
+
+    # Frames that locate the button modules.
+    for name, (bx, by) in BUTTONS.items():
+        parts.append(module_frame(name, bx, by, H))
+
+    # Lip just inside the walls, stopping short of the corners so each
+    # side can flex on its own as it clips in.
     a = WALL + LIP_FIT
     b = a + LIP_THICK
-    stop = SCREW_INSET + POST_RADIUS + 4.0
+    stop = WALL + 6.0
     z0, z1 = H - LIP_DEPTH, H + 0.5
 
     parts.append(box(stop, a, z0, W - stop, b, z1))
@@ -408,7 +500,43 @@ def build_panel():
     parts.append(box(a, stop, z0, b, D - stop, z1))
     parts.append(box(W - b, stop, z0, W - a, D - stop, z1))
 
+    # Bumps on the outside of the lip that click under the base's
+    # ridges, a little shorter than the ridges at each end.
+    zb = H - SNAP_Z - 1.2
+    bump = [(a + 0.2, zb - 1.6), (a - SNAP, zb - 0.9),
+            (a - SNAP, zb), (a + 0.2, zb + 0.7)]
+
+    for side, (a0, a1) in SNAPS.items():
+        parts.append(wall_strip(side, bump, a0 + 3.0, a1 - 3.0))
+
     return np.concatenate(parts)
+
+
+def module_frame(name, cx, cy, panel_bottom):
+    """Open frame round a button module, with a gap for its cable.
+
+    Built as four wall pieces; the cable gap is in the wall at the far
+    end of the board's long side, facing the back of the case.
+    """
+    w, l = MODULE_W + 2 * MODULE_FIT, MODULE_L + 2 * MODULE_FIT
+
+    if MODULE_ALONG[name] == "x":
+        w, l = l, w
+
+    t = MODULE_WALL
+    x0, x1 = cx - w / 2 - t, cx + w / 2 + t
+    y0, y1 = cy - l / 2 - t, cy + l / 2 + t
+    z0, z1 = panel_bottom - MODULE_DEPTH, panel_bottom + 0.5
+
+    gap0, gap1 = cx - MODULE_GAP / 2, cx + MODULE_GAP / 2
+    walls = [
+        box(x0, y0, z0, x1, y0 + t, z1),                 # front
+        box(x0, y0, z0, x0 + t, y1, z1),                 # left
+        box(x1 - t, y0, z0, x1, y1, z1),                 # right
+        box(x0, y1 - t, z0, gap0, y1, z1),               # back, left of gap
+        box(gap1, y1 - t, z0, x1, y1, z1),               # back, right of gap
+    ]
+    return np.concatenate(walls)
 
 
 def panel_for_printing(panel):
@@ -439,17 +567,18 @@ def d_shaft(r, flat, n=48):
     return pts
 
 
-def knob_outline():
-    r = KNOB_D / 2
+def knob_outline(diameter, flutes):
+    r = diameter / 2
     pts = []
-    n = KNOB_FLUTES * 8
+    n = flutes * 8
+    depth = 0.7 if diameter < 30 else 1.0
 
     for i in range(n):
         a = 2 * math.pi * i / n
-        rr = r - 0.7 * (1 - math.cos(KNOB_FLUTES * a)) / 2
+        rr = r - depth * (1 - math.cos(flutes * a)) / 2
 
         # A deeper groove marks where the knob points.
-        if abs(math.remainder(a - math.pi / 2, 2 * math.pi)) < math.radians(5):
+        if abs(math.remainder(a - math.pi / 2, 2 * math.pi)) < math.radians(4):
             rr = r - 2.2
 
         pts.append((rr * math.cos(a), rr * math.sin(a)))
@@ -457,12 +586,32 @@ def knob_outline():
     return pts
 
 
-def build_knob():
+def build_knob(name):
     # Printed top-down: solid top on the bed, shaft hole facing up.
-    outline = knob_outline()
-    cap = prism([outline], 0, KNOB_TOP + 0.3)
-    body = prism([outline, d_shaft(SHAFT_D / 2, SHAFT_FLAT)], KNOB_TOP, KNOB_H)
-    return np.concatenate([cap, body])
+    diameter, height, flutes = KNOBS[name]
+    outline = knob_outline(diameter, flutes)
+    shaft = d_shaft(SHAFT_D / 2, SHAFT_FLAT)
+
+    if name != "jog":
+        cap = prism([outline], 0, KNOB_TOP + 0.3)
+        body = prism([outline, shaft], KNOB_TOP, height)
+        return np.concatenate([cap, body])
+
+    # The jog wheel: a shallow finger dimple near the edge (printed as a
+    # recess in the top face, which is on the bed), a solid top, then a
+    # hub round the shaft and a ring round the rim, so it is not a solid
+    # 46 mm puck of plastic.
+    r = diameter / 2
+    dimple = circle(0, -(r - JOG_DIMPLE / 2 - 4.0), JOG_DIMPLE / 2, 32)
+    face = prism([outline, dimple], 0, 1.2)
+    top = prism([outline], 1.0, KNOB_TOP + 1.3)
+    hub = prism([circle(0, 0, 6.0, 48), shaft], KNOB_TOP + 1.0, height)
+    rim = prism([outline, circle(0, 0, r - 3.0, 96)], KNOB_TOP + 1.0, height)
+    spokes = [box(-1.2, 5.5, KNOB_TOP + 1.0, 1.2, r - 2.5, height - 2.0)]
+    spokes.append(place(spokes[0], [[0, -1, 0], [1, 0, 0], [0, 0, 1]]))
+    spokes.append(place(spokes[0], [[-1, 0, 0], [0, -1, 0], [0, 0, 1]]))
+    spokes.append(place(spokes[0], [[0, 1, 0], [-1, 0, 0], [0, 0, 1]]))
+    return np.concatenate([face, top, hub, rim] + spokes)
 
 
 def build_button_cap():
@@ -496,7 +645,8 @@ def build_all():
     return {
         "base": build_base(),
         "top_panel": panel_for_printing(build_panel()),
-        "knob": build_knob(),
+        "tempo_knob": build_knob("tempo"),
+        "jog_knob": build_knob("jog"),
         "button_cap": build_button_cap(),
     }
 
