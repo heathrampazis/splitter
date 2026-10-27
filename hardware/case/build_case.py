@@ -135,17 +135,22 @@ MODULE_ALONG = {"play": "x", "vocals": "y", "drums": "y", "instrumental": "y"}
 
 # --- Panel fixing ----------------------------------------------------------
 
-# --- Clip-on lid ------------------------------------------------------------
+# --- Lid -------------------------------------------------------------------
 #
-# The lid has a lip all round its underside that fits just inside the
-# base's walls. Small bumps on the lip click under matching ridges on
-# the inside of the walls. No screws. To open it, lift at the finger
-# notch in the front wall.
+# The lid just sits on the base: a lip round its underside drops inside
+# the walls and stops it sliding about. Its lower edge is chamfered so it
+# finds its way in, and there is enough gap to forgive a rough print.
+# No screws. To lift it off, use the finger notch in the front wall.
+#
+# Optional snap clips: set SNAP to about 0.5 to add small bumps on the
+# lip that click under ridges inside the walls. Left at 0 (off), because
+# clips are the part most likely to come out too tight or too loose.
 
-LIP_FIT = 0.4         # gap between the panel's locating lip and walls
-LIP_THICK = 1.4       # thin enough to flex as it clips in
-LIP_DEPTH = 10.0      # how far the lip reaches down inside the walls
-SNAP = 0.5            # how far each ridge and bump sticks out
+LIP_FIT = 0.6         # gap between the lid's lip and the walls, each side
+LIP_THICK = 1.8
+LIP_DEPTH = 8.0       # how far the lip reaches down inside the walls
+LIP_CHAMFER = 1.2     # lead-in on the lip's lower outside edge
+SNAP = 0.0            # 0 = no clips; about 0.5 for clips
 SNAP_Z = 6.5          # ridge height below the top of the walls
 # Where the ridges run along each wall (they skip the port openings).
 SNAPS = {
@@ -459,7 +464,7 @@ def build_base():
     ridge = [(WALL - 0.2, zr - 1.0), (WALL + SNAP, zr - 0.3),
              (WALL + SNAP, zr + 0.2), (WALL - 0.2, zr + 0.9)]
 
-    for side, (a0, a1) in SNAPS.items():
+    for side, (a0, a1) in SNAPS.items() if SNAP > 0 else ():
         parts.append(wall_strip(side, ridge, a0, a1))
 
     # Posts for the Pi. Its USB end is on the left, so the holes are
@@ -538,17 +543,19 @@ def build_panel():
     for name, (bx, by) in BUTTONS.items():
         parts.append(module_frame(name, bx, by, H))
 
-    # Lip just inside the walls, stopping short of the corners so each
-    # side can flex on its own as it clips in.
+    # Lip just inside the walls, stopping short of the corners. Its lower
+    # outside edge is chamfered so the lid drops in easily; printed face
+    # down, the chamfer is just the lip getting thinner as it rises.
     a = WALL + LIP_FIT
     b = a + LIP_THICK
     stop = WALL + 6.0
     z0, z1 = H - LIP_DEPTH, H + 0.5
+    c = LIP_CHAMFER
+    lip = [(a + c, z0), (b, z0), (b, z1), (a, z1), (a, z0 + c)]
 
-    parts.append(box(stop, a, z0, W - stop, b, z1))
-    parts.append(box(stop, D - b, z0, W - stop, D - a, z1))
-    parts.append(box(a, stop, z0, b, D - stop, z1))
-    parts.append(box(W - b, stop, z0, W - a, D - stop, z1))
+    for side, (a0, a1) in (("front", (stop, W - stop)), ("back", (stop, W - stop)),
+                           ("left", (stop, D - stop)), ("right", (stop, D - stop))):
+        parts.append(wall_strip(side, lip, a0, a1))
 
     # Bumps on the outside of the lip that click under the base's
     # ridges, a little shorter than the ridges at each end.
@@ -556,7 +563,7 @@ def build_panel():
     bump = [(a + 0.2, zb - 1.6), (a - SNAP, zb - 0.9),
             (a - SNAP, zb), (a + 0.2, zb + 0.7)]
 
-    for side, (a0, a1) in SNAPS.items():
+    for side, (a0, a1) in SNAPS.items() if SNAP > 0 else ():
         parts.append(wall_strip(side, bump, a0 + 3.0, a1 - 3.0))
 
     return np.concatenate(parts)
