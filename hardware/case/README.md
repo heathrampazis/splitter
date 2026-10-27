@@ -79,12 +79,15 @@ any more; delete them.
    the recess, glass up, until it sits on the four corner shelves. It is
    a loose fit on purpose; a dab of hot glue in two corners stops it
    moving. Plug the ribbon and power wires into the Pi.
-4. **Encoders.** Push each encoder board's shaft up through its hole from
-   underneath and tighten the nut on top. Turn the jog board so its pins
-   point to the right or towards the back, away from the INSTR button
-   frame. If the encoder has a small anti-rotation tab next to the
-   bushing, snip it off with side cutters, or the board will not sit
-   flat.
+4. **Encoders.** Both are the same EC11 "Rotary Encoder Module for
+   Arduino". Take the nut and washer off, push the shaft up through its
+   hole from underneath so the board drops between the two rails, and
+   tighten the nut on top. The rails stop the board twisting when you
+   turn the knob. Lay the boards left-right: **tempo with its pins
+   pointing left**, **jog with its pins pointing right**, so neither runs
+   into a button frame or the screen. If the encoder has a small
+   anti-rotation tab next to the bushing, snip it off with side cutters,
+   or it will not sit flat.
 5. **Buttons.** Drop a button cap into each round button hole from
    underneath, so the stem pokes up through the panel and the flange sits
    against the underside. Lower a DFR0029 module, switch up, into the
@@ -98,8 +101,9 @@ any more; delete them.
    underside goes just inside the walls — and press down round the edges
    until it clicks. To open it, lift at the finger notch in the middle of
    the front edge.
-8. **Knobs.** Push the big jog knob onto the encoder in front of the
-   screen and the small one onto tempo, flat side matching.
+8. **Knobs.** Push the big printed jog knob onto the encoder at the
+   front and the small one onto tempo, flat side matching. If your
+   encoders came with knobs, you can use one of those for tempo instead.
 
 Power and the USB stick go in through the openings in the back and
 sides.
@@ -119,7 +123,8 @@ or calipers before printing saves a reprint:
 | Display, front to back             | `SCREEN_D`                        | 91.5 mm    |
 | Display glass part, front to back of its edge | `SCREEN_SINK` sets how deep it sits | sits 5.5 mm down |
 | Button module board                | `MODULE_W`, `MODULE_L`            | 22 × 30 mm (DFR0029) |
-| Encoder bushing diameter           | `ENCODER_HOLE`                    | 8.0 mm hole for M7 |
+| Encoder board width                | `ENC_BOARD_W`                     | rails take boards up to 22.5 mm wide |
+| Encoder bushing diameter           | `ENCODER_HOLE`                    | 9.0 mm hole for M7 |
 | Encoder shaft                      | `SHAFT_D`, `SHAFT_FLAT`           | 6 mm D shaft |
 
 The screen rests on four triangular corner shelves, 14 mm along each
@@ -136,7 +141,7 @@ The port openings are generous. If a plug still fouls, widen
 `BACK_NOTCH_X` or `LEFT_NOTCH_Y`, or move the Pi with `PI_X` and `PI_Y`.
 
 The button caps only need to reach the switch: if a DFR0029's own cap
-already pokes through the 14 mm hole, you can leave the printed cap out
+already pokes through the 14.5 mm hole, you can leave the printed cap out
 and glue the module so its own cap stands proud.
 
 ---

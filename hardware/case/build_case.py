@@ -77,16 +77,32 @@ SHELF_THICK = 1.6
 # Positions are the centre of each hole, measured from the case's front
 # left corner.
 
-ENCODER_HOLE = 8.0    # the encoder boards' EC11 has an M7 bushing; 1 mm spare
+ENCODER_HOLE = 9.0    # the encoder boards' EC11 has an M7 bushing; 2 mm spare, the nut and washer still cover it
 ENCODERS = {"tempo": (150.0, 52.0), "jog": (118.0, 25.0)}
 
-BUTTON_HOLE = 14.0    # the printed cap's stem is 12.2; the flange (17) still covers it
+BUTTON_HOLE = 14.5    # the printed cap's stem is 12.2; the flange (17) still covers it
 BUTTONS = {
-    "play": (30.0, 21.0),
+    "play": (30.0, 20.0),
     "vocals": (30.0, 52.0),
     "drums": (62.0, 52.0),
     "instrumental": (94.0, 52.0),
 }
+
+# --- EC11 encoder modules ("Rotary Encoder Module for Arduino") ---------
+# Both encoders are the same module: an EC11 on a small board with five
+# pins (GND, S1, S2, KEY, 5V). The nut on its M7 bushing clamps it to the
+# lid. Two rails under the lid, either side of the board, stop it
+# twisting when the knob turns. They are spaced for boards up to 22.5 mm
+# wide (makers vary from about 19 to 22.4 mm); a narrower board just has
+# some play, which the nut takes up. The boards lie left-right: tempo
+# with its pins to the left, jog with its pins to the right.
+
+ENC_BOARD_W = 22.5    # widest board the rails take
+ENC_RAIL = 1.6        # rail thickness
+ENC_RAIL_DEPTH = 10.0 # how far the rails hang below the lid; the board
+                      # sits about 8 mm down, under the encoder's body
+# How far the rails run left and right of each encoder's centre.
+ENC_RAILS = {"tempo": (-12.0, 12.0), "jog": (-10.0, 12.0)}
 
 # --- DFRobot DFR0029 button modules ----------------------------------------
 # A shallow open frame under each button hole. The module's board drops
@@ -483,6 +499,14 @@ def build_panel():
         tri = [(cx - dx * 0.5, cy - dy * 0.5), (cx + dx * c, cy - dy * 0.5),
                (cx - dx * 0.5, cy + dy * c)]
         parts.append(prism([tri], z0, shelf_top))
+
+    # Rails that stop the encoder boards twisting.
+    for name, (ex, ey) in ENCODERS.items():
+        r0, r1 = ENC_RAILS[name]
+        half = ENC_BOARD_W / 2 + 0.3
+        for y0 in (ey - half - ENC_RAIL, ey + half):
+            parts.append(box(ex + r0, y0, H - ENC_RAIL_DEPTH,
+                             ex + r1, y0 + ENC_RAIL, H + 0.5))
 
     # Frames that locate the button modules.
     for name, (bx, by) in BUTTONS.items():
