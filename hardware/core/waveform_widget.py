@@ -3,18 +3,23 @@ The waveform: shows where the track is, and drags to move through it.
 
 Three zoom levels, cycled by the ZOOM button in its corner:
 
+    8 s        the waveform scrolls past a fixed playhead in the middle
+               as the track plays. This is where it starts.
+    30 s       the same, further out.
     overview   the whole track fits the width; the playhead moves along
                it. Tap or drag anywhere to jump there.
-    30 s       the waveform scrolls past a fixed playhead in the middle.
-    8 s        the same, closer in, for finding a beat.
 
-When zoomed in, dragging moves the waveform under your finger, like
-pushing a record: drag left to go forward, right to go back.
+When zoomed in, dragging works like the jog wheel on a CDJ: the track
+plays at whatever speed and direction your finger moves - drag left to
+go forward, right to go back - and a quick flick keeps it spinning fast
+for a moment after you let go, then it settles back to normal.
 
 The images come from Splitter Studio (waveform_overview.png, _medium
 and _detail). Only the visible slice is drawn each frame, rather than
 scaling a 25,000-pixel-wide image every time.
 """
+
+import time
 
 from PySide6.QtCore import QRectF, Qt, Signal
 from PySide6.QtGui import QColor, QPainter, QPen, QPixmap
@@ -24,19 +29,26 @@ import styles
 
 # (name, image, seconds visible or None for the whole track, button label)
 ZOOMS = (
-    ("overview", "overview", None, "ZOOM · ALL"),
-    ("medium", "medium", 30.0, "ZOOM · 30 s"),
     ("detail", "detail", 8.0, "ZOOM · 8 s"),
+    ("medium", "medium", 30.0, "ZOOM · 30 s"),
+    ("overview", "overview", None, "ZOOM · ALL"),
 )
 
 # A press that moves less than this is a tap, not a drag.
 DRAG_THRESHOLD = 8
 
+# The flick speed is measured over the last part of a drag, this long.
+FLING_WINDOW = 0.08
+
 
 class WaveformWidget(QWidget):
+    # Dragging when zoomed in.
     scrub_started = Signal()
-    scrub_moved = Signal(float)     # new position, 0.0 to 1.0
-    scrub_ended = Signal()
+    scrub_moved = Signal(float)     # where the finger has the track, 0.0 to 1.0
+    scrub_ended = Signal(float)     # flick speed, x normal; minus is backwards
+
+    # A tap or drag on the overview: jump straight there, 0.0 to 1.0.
+    seek = Signal(float)
 
     def __init__(self):
         super().__init__()
@@ -49,8 +61,9 @@ class WaveformWidget(QWidget):
         self.press_x = None
         self.press_progress = 0.0
         self.dragging = False
+        self.recent = []    # (time, progress) for the last moments of a drag
 
-        self.setMinimumHeight(140)
+        self.setMinimumHeight(120)
         self.setAttribute(Qt.WA_OpaquePaintEvent)
 
         self.zoom_button = QPushButton(ZOOMS[0][3], self)
@@ -144,6 +157,7 @@ class WaveformWidget(QWidget):
         self.press_x = event.position().x()
         self.press_progress = self.progress
         self.dragging = False
+        self.recent = []
 
     def mouseMoveEvent(self, event):
         if self.press_x is None:
@@ -156,9 +170,23 @@ class WaveformWidget(QWidget):
                 return
 
             self.dragging = True
-            self.scrub_started.emit()
 
-        self.move_to(self.position_at(x))
+            if not self.is_overview():
+                self.scrub_started.emit()
+
+        value = max(0.0, min(self.position_at(x), 1.0))
+        self.progress = value
+        self.update()
+
+        if self.is_overview():
+            self.seek.emit(value)
+            return
+
+        now = time.monotonic()
+        self.recent.append((now, value))
+        self.recent = [(t, p) for t, p in self.recent if now - t <= FLING_WINDOW]
+
+        self.scrub_moved.emit(value)
 
     def mouseReleaseEvent(self, event):
         if self.press_x is None:
@@ -166,20 +194,35 @@ class WaveformWidget(QWidget):
 
         if self.dragging:
             self.dragging = False
-            self.scrub_ended.emit()
+
+            if not self.is_overview():
+                self.scrub_ended.emit(self.fling_speed())
 
         elif self.is_overview():
             # A tap on the overview jumps straight there.
-            self.scrub_started.emit()
-            self.move_to(event.position().x() / max(1, self.width()))
-            self.scrub_ended.emit()
+            value = max(0.0, min(event.position().x() / max(1, self.width()), 1.0))
+            self.progress = value
+            self.seek.emit(value)
+            self.update()
 
         self.press_x = None
 
-    def move_to(self, value):
-        self.progress = max(0.0, min(float(value), 1.0))
-        self.scrub_moved.emit(self.progress)
-        self.update()
+    # How fast the finger was moving the track as it let go, as a
+    # multiple of normal speed. A finger that stopped before lifting
+    # gives 0, so the track stays where it was put.
+    def fling_speed(self):
+        now = time.monotonic()
+        recent = [(t, p) for t, p in self.recent if now - t <= FLING_WINDOW]
+
+        if len(recent) < 2:
+            return 0.0
+
+        (t0, p0), (t1, p1) = recent[0], recent[-1]
+
+        if t1 - t0 <= 0:
+            return 0.0
+
+        return (p1 - p0) * self.duration / (t1 - t0)
 
     # =====================================================
     # DRAWING

@@ -16,8 +16,9 @@ what each control does:
     jog           while playing: bend the speed briefly to line up a beat
                   while paused: step through the track to find a cue
 
-The screen's own controls are the waveform (drag to move through the
-track), its zoom button, and SONGS.
+The screen also has touch copies of play and the three stem buttons,
+the waveform (drag it like a jog wheel to move through the track), its
+zoom button, and SONGS.
 """
 
 import json
@@ -101,6 +102,7 @@ class MainWindow(QMainWindow):
         waveform.scrub_started.connect(self.scrub_started)
         waveform.scrub_moved.connect(self.scrub_moved)
         waveform.scrub_ended.connect(self.scrub_ended)
+        waveform.seek.connect(self.seek)
 
         self.player_page.clear()
 
@@ -289,18 +291,23 @@ class MainWindow(QMainWindow):
     # ---- dragging the waveform ----
 
     def scrub_started(self):
-        # Hold playback while a finger is on the waveform, then carry on
-        # from wherever it lets go.
+        # The engine plays the track along with the finger, so the music
+        # is heard moving fast forwards or backwards, then carries on
+        # (or stays paused) when the finger lifts.
         self.scrub_was_playing = self.engine.playing
-        self.engine.pause()
+        self.engine.scrub_begin()
 
     def scrub_moved(self, progress):
         _, _, total = self.engine.get_time_info()
-        self.engine.set_position(progress * total)
+        self.engine.scrub_to(progress * total)
 
-    def scrub_ended(self):
-        if self.scrub_was_playing:
-            self.engine.play()
+    def scrub_ended(self, fling):
+        self.engine.scrub_end(fling, self.scrub_was_playing)
+
+    # A tap or drag on the overview: straight there.
+    def seek(self, progress):
+        _, _, total = self.engine.get_time_info()
+        self.engine.set_position(progress * total)
 
     # =====================================================
     # SCREEN UPDATE

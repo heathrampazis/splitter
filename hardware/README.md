@@ -87,12 +87,18 @@ order as on the module, so a three-wire ribbon goes straight across. Play
 runs down the inner column; the other three run up the outer column, so
 turn those ribbons round.
 
-These modules have no resistor holding D steady, so the software switches
-each **+** pin to 0 V, making it a second ground, and turns on the Pi's
-pull-up on D. D then reads high at rest and low when pressed, whichever
-side of the switch the module connects it to. (`BUTTON_MODE` in
-`core/controls/gpio_controls.py` switches to the conventional wiring for
-modules that do have their own resistor.)
+The buttons are DFRobot **DFR0029** Gravity Digital Push Buttons. On the
+Gravity cable, **green is D, red is +, black is −**. Each has its own
+resistor holding D low, so it needs 3.3 V on **+**, and D goes high while
+pressed.
+
+The player works this out by itself when it starts, button by button:
+it also handles bare switch modules with no resistor (by using + as a
+second ground and the Pi's pull-up on D). The terminal says which it
+found, for example `Controls: play button - module with its own
+resistor: + at 3.3 V, press reads high`. Keep your hands off the buttons
+while it starts. To force one way, set `BUTTON_MODE` in
+`core/controls/gpio_controls.py`.
 
 **Never connect a button or encoder wire to 5V (pins 2 and 4).**
 
@@ -234,20 +240,22 @@ cd core
 +--------------------------------------------------------------+
 | Track name                           124.0 BPM  +0.0%  01:23 |
 +--------------------------------------------------------------+
-|                                               [ZOOM · ALL]   |
+|                                               [ZOOM · 8 s]   |
 |                      waveform (drag it)                      |
 +--------------------------------------------------------------+
 | [▶ PLAYING]   [VOCALS] [DRUMS] [INSTRUMENTAL]       [SONGS]  |
 +--------------------------------------------------------------+
 ```
 
-- **Waveform** — drag it with a finger to move through the track.
-  Playback holds while your finger is down and carries on from where you
-  let go.
+- **Waveform** — scrolls past the red playhead as the track plays.
+  Drag it like a CDJ jog wheel: the music plays along with your finger,
+  fast forwards or backwards, and a quick flick keeps it spinning for a
+  moment before it settles back to normal speed (or stops, if paused).
+  Drag left to go forward, right to go back.
+  - **ZOOM · 8 s** (where it starts) and **ZOOM · 30 s**: scrolling
+    views, closer in and further out.
   - **ZOOM · ALL**: the whole track fits the screen. Tap or drag anywhere
-    to jump there.
-  - **ZOOM · 30 s** and **ZOOM · 8 s**: the waveform scrolls past the red
-    playhead. Drag left to go forward, right to go back.
+    to jump straight there.
 - **ZOOM** — cycles through the three.
 - **SONGS** — the track list. Tap a track to load it.
 - **PLAY / PAUSE** (bottom left) — tap to play or pause, the same as

@@ -37,7 +37,7 @@ except ImportError:
 
 from controls.gpio_controls import (BOUNCE_SECONDS, BUTTON_ACTIVE_HIGH,
                                     BUTTON_MODE, BUTTONS, ENCODERS, KEYS,
-                                    REVERSED, describe)
+                                    REVERSED, describe, open_button)
 
 devices = []
 counts = {}
@@ -66,13 +66,8 @@ def setup_encoder(name, s1, s2, power):
 
 
 def setup_button(name, d_pin, plus_pin):
-    if BUTTON_MODE == "pull-up":
-        devices.append(DigitalOutputDevice(plus_pin, initial_value=False))
-        button = Button(d_pin, pull_up=True, bounce_time=BOUNCE_SECONDS)
-    else:
-        devices.append(DigitalOutputDevice(plus_pin, initial_value=True))
-        button = Button(d_pin, pull_up=None, active_state=BUTTON_ACTIVE_HIGH,
-                        bounce_time=BOUNCE_SECONDS)
+    plus, button, how = open_button(d_pin, plus_pin)
+    devices.append(plus)
 
     button.when_pressed = lambda: report_button(name, True)
     button.when_released = lambda: report_button(name, False)
@@ -80,7 +75,7 @@ def setup_button(name, d_pin, plus_pin):
 
     state = "reads PRESSED before touching it - check its wiring" \
         if button.is_pressed else "up"
-    return f"button, D on GPIO{d_pin}, + on GPIO{plus_pin}: {state}"
+    return f"button, D on GPIO{d_pin}, + on GPIO{plus_pin}: {state}\n{'':14} ({how})"
 
 
 def setup_key(name, pin):

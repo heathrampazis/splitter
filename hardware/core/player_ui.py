@@ -13,7 +13,7 @@ much of it shows, and SONGS picks a track.
     +--------------------------------------------------------------+
     | Track name                           BPM 123.0  +0.0%  01:23 |
     +--------------------------------------------------------------+
-    |                                               [ZOOM · ALL]   |
+    |                                               [ZOOM · 8 s]   |
     |                     waveform  (drag me)                      |
     |                                                              |
     +--------------------------------------------------------------+
@@ -38,7 +38,7 @@ STEM_GROUPS = (
 
 
 # Tallest the waveform gets, in pixels, on the 720-pixel-high screen.
-WAVEFORM_MAX_HEIGHT = 430
+WAVEFORM_MAX_HEIGHT = 300
 
 
 # A label that shortens long text with "…" instead of pushing the layout.
@@ -91,15 +91,18 @@ class PlayerUI(QWidget):
 
         layout.addWidget(self.build_info_bar())
 
+        # The spare height goes evenly above and below the waveform.
+        layout.addStretch(1)
+
         self.waveform = WaveformWidget()
         self.waveform.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
         # Kept a little short of the full height, so the touch buttons
         # below get room for a finger.
         self.waveform.setMaximumHeight(WAVEFORM_MAX_HEIGHT)
-        layout.addWidget(self.waveform, 1)
+        layout.addWidget(self.waveform, 3)
 
-        layout.addStretch(0)
+        layout.addStretch(1)
         layout.addWidget(self.build_status_bar())
 
     def build_info_bar(self):

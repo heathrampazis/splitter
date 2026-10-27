@@ -26,14 +26,21 @@ is optional. The jog encoder's KEY is not used. Never connect anything here
 to the 5 V pins (2 and 4): the Pi's GPIO pins only take 3.3 V, and the
 encoder boards pass their supply straight through to S1 and S2.
 
-Two things carried over from the Pico version, because they are what
-made the hardware work:
+How a button module is read is worked out when the player starts,
+because modules differ inside:
 
-  * The button modules have no resistor holding D steady, so D would
-    float. Their + pin goes to a GPIO switched to 0 V, making it a
-    second ground, and D uses the Pi's internal pull-up. D then rests
-    high and the switch pulls it low, whichever side of the switch the
-    module wires D to.
+  * Modules with their own resistor, like the DFRobot DFR0029 (Gravity
+    Digital Push Button), need 3.3 V on + to work at all. Given that,
+    the DFR0029 reads high while pressed.
+
+  * Bare modules with no resistor leave D floating. For those, + is
+    switched to 0 V, making it a second ground, and D uses the Pi's
+    internal pull-up, so D rests high and the switch pulls it low.
+
+Each button starts in the second way. If D then reads pressed before
+anyone has touched it, the module has its own resistor pulling D down,
+so + is switched to 3.3 V instead and the resting level of D says which
+way a press goes. (Keep your hands off the buttons while it starts.)
 
   * The Pi has only two 3.3 V pins, and every wire has a pin of its own,
     so the jog encoder board's 5V pin is powered from a GPIO switched on
@@ -45,7 +52,9 @@ only be touched from the main thread, so every event becomes a Qt
 signal that Qt delivers on the main thread.
 """
 
-from gpiozero import Button, DigitalOutputDevice, RotaryEncoder
+import time
+
+from gpiozero import Button, DigitalOutputDevice, InputDevice, RotaryEncoder
 from PySide6.QtCore import QObject, Signal
 
 # ---------------------------------------------------------------------
@@ -77,12 +86,13 @@ BUTTONS = {
 REVERSED = set()  # for example {"jog"}
 
 # How a button module is read:
+#   "auto"    - work it out for each button at start-up (see above).
 #   "pull-up" - + is switched to 0 V and D uses the Pi's pull-up. Suits
-#               modules without their own resistor, like the ones this
-#               was built with.
+#               bare modules without their own resistor.
 #   "module"  - + is switched to 3.3 V and the module's own resistor
-#               holds D. Then BUTTON_ACTIVE_HIGH says which way it goes.
-BUTTON_MODE = "pull-up"
+#               holds D, as on the DFRobot DFR0029. BUTTON_ACTIVE_HIGH
+#               then says which way a press goes (True for the DFR0029).
+BUTTON_MODE = "auto"
 BUTTON_ACTIVE_HIGH = True
 
 BOUNCE_SECONDS = 0.02
@@ -102,6 +112,44 @@ def describe(error):
         return f"{text} ({PIN_HELP})"
 
     return text
+
+
+# Lets a pin settle after its pull or supply changes, before reading it.
+SETTLE_SECONDS = 0.01
+
+
+# Sets up one button module. Returns the + pin's output, the Button, and
+# a description of how it ended up being read.
+def open_button(d_pin, plus_pin):
+    if BUTTON_MODE in ("auto", "pull-up"):
+        plus = DigitalOutputDevice(plus_pin, initial_value=False)
+        button = Button(d_pin, pull_up=True, bounce_time=BOUNCE_SECONDS)
+        time.sleep(SETTLE_SECONDS)
+
+        if BUTTON_MODE == "pull-up" or not button.is_pressed:
+            return plus, button, "bare switch: + as ground, press reads low"
+
+        # Pressed before anyone touched it: the module's own resistor is
+        # holding D down. It needs 3.3 V on + instead.
+        button.close()
+        plus.close()
+
+    plus = DigitalOutputDevice(plus_pin, initial_value=True)
+    time.sleep(SETTLE_SECONDS)
+
+    if BUTTON_MODE == "module":
+        active_high = BUTTON_ACTIVE_HIGH
+    else:
+        # Whichever level D rests at, a press is the other one.
+        probe = InputDevice(d_pin, pull_up=None, active_state=True)
+        active_high = not probe.value
+        probe.close()
+
+    button = Button(d_pin, pull_up=None, active_state=active_high,
+                    bounce_time=BOUNCE_SECONDS)
+
+    level = "high" if active_high else "low"
+    return plus, button, f"module with its own resistor: + at 3.3 V, press reads {level}"
 
 
 class GPIOControls(QObject):
@@ -165,13 +213,9 @@ class GPIOControls(QObject):
         self.devices.append(encoder)
 
     def add_button(self, name, d_pin, plus_pin):
-        if BUTTON_MODE == "pull-up":
-            self.devices.append(DigitalOutputDevice(plus_pin, initial_value=False))
-            button = Button(d_pin, pull_up=True, bounce_time=BOUNCE_SECONDS)
-        else:
-            self.devices.append(DigitalOutputDevice(plus_pin, initial_value=True))
-            button = Button(d_pin, pull_up=None, active_state=BUTTON_ACTIVE_HIGH,
-                            bounce_time=BOUNCE_SECONDS)
+        plus, button, how = open_button(d_pin, plus_pin)
+        self.devices.append(plus)
+        print(f"Controls: {name} button - {how}")
 
         button.when_pressed = lambda: self.button_changed.emit(name, True)
         button.when_released = lambda: self.button_changed.emit(name, False)
