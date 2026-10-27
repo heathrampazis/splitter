@@ -10,7 +10,6 @@ Needs only numpy. Writes these into stl/ next to this file:
                       onto the base (prints face down)
     tempo_knob.stl    print 1
     jog_knob.stl      print 1, the big one
-    encoder_washer.stl print 2
 
 Every measurement lives in the SETTINGS section below. Change a number,
 run the script again, and re-slice. Units are millimetres.
@@ -77,8 +76,10 @@ SHELF_THICK = 1.6
 # Positions are the centre of each hole, measured from the case's front
 # left corner.
 
-ENCODER_HOLE = 14.0   # the EC11's threaded neck is M7, so 3.5 mm spare all
-                      # round; the 21 mm printed washer under the nut covers it
+ENCODER_HOLE = 8.5    # the EC11's threaded neck is M7, so 0.75 mm spare all
+                      # round, while its own nut (about 9.5 mm across) still
+                      # clamps on the lid. Bigger needs a washer: see
+                      # WASHER_OD below and build_washer().
 ENCODERS = {"tempo": (150.0, 52.0), "jog": (120.0, 25.0)}
 
 BUTTON_HOLE = 16.5    # the module's own cap pokes through: 11.2 mm top,
@@ -94,7 +95,7 @@ BUTTONS = {
 # Both encoders are the same module: an EC11 on a small round blue board,
 # five pins (GND, S1, S2, KEY, 5V) pointing down along one edge, a long
 # M7 threaded neck and a knurled 6 mm shaft split down the middle. The
-# nut on the neck clamps it to the lid, over a printed washer. Two rails
+# nut on the neck clamps it to the lid. Two rails
 # under the lid, either side of the board, stop it twisting when the knob
 # turns. They leave room for boards up to 28 mm across; a smaller board
 # just has some play, which the nut takes up. The pins go left-right:
@@ -193,18 +194,22 @@ VENT_PITCH = 8.0
 
 # name: (diameter, height, flutes)
 KNOBS = {
-    "tempo": (22.0, 16.0, 20),
-    "jog": (46.0, 14.0, 48),
+    "tempo": (18.0, 13.0, 18),
+    "jog": (38.0, 12.0, 40),
 }
-KNOB_TOP = 3.0        # solid top
+# Each knob's shaft hole is this deep and closed at the top, so the knob
+# bottoms out on the end of the shaft and rides about 4 mm above the nut
+# instead of resting on the lid. (The EC11's shaft stands about 17 mm
+# above the lid: 4.5 mm of threaded neck, then the knurled part.)
+KNOB_BORE = 9.0
 SHAFT_D = 6.0         # round hole that presses onto the knurled, split
                       # 6 mm shaft (printed holes come out a little small,
                       # which makes it grip). Loose? Try 5.8. Too tight? 6.2.
 JOG_DIMPLE = 7.0      # finger dimple near the jog wheel's edge
 
-# --- Encoder washer --------------------------------------------------------
-# Sits under the encoder's nut on top of the lid and covers the oversize
-# hole.
+# --- Encoder washer (not printed by default) -----------------------------
+# Only needed if ENCODER_HOLE is made bigger than the nut. To print one,
+# add "encoder_washer": build_washer() to build_all().
 
 WASHER_OD = 21.0
 WASHER_ID = 7.4
@@ -631,22 +636,24 @@ def build_knob(name):
     outline = knob_outline(diameter, flutes)
     shaft = circle(0, 0, SHAFT_D / 2, 48)
 
+    top_t = height - KNOB_BORE           # solid top above the shaft hole
+
     if name != "jog":
-        cap = prism([outline], 0, KNOB_TOP + 0.3)
-        body = prism([outline, shaft], KNOB_TOP, height)
+        cap = prism([outline], 0, top_t + 0.3)
+        body = prism([outline, shaft], top_t, height)
         return np.concatenate([cap, body])
 
     # The jog wheel: a shallow finger dimple near the edge (printed as a
     # recess in the top face, which is on the bed), a solid top, then a
     # hub round the shaft and a ring round the rim, so it is not a solid
-    # 46 mm puck of plastic.
+    # puck of plastic.
     r = diameter / 2
     dimple = circle(0, -(r - JOG_DIMPLE / 2 - 4.0), JOG_DIMPLE / 2, 32)
     face = prism([outline, dimple], 0, 1.2)
-    top = prism([outline], 1.0, KNOB_TOP + 1.3)
-    hub = prism([circle(0, 0, 6.0, 48), shaft], KNOB_TOP + 1.0, height)
-    rim = prism([outline, circle(0, 0, r - 3.0, 96)], KNOB_TOP + 1.0, height)
-    spokes = [box(-1.2, 5.5, KNOB_TOP + 1.0, 1.2, r - 2.5, height - 2.0)]
+    top = prism([outline], 1.0, top_t + 0.3)
+    hub = prism([circle(0, 0, 6.0, 48), shaft], top_t, height)
+    rim = prism([outline, circle(0, 0, r - 2.6, 96)], top_t, height)
+    spokes = [box(-1.2, 5.5, top_t, 1.2, r - 2.2, height - 2.0)]
     spokes.append(place(spokes[0], [[0, -1, 0], [1, 0, 0], [0, 0, 1]]))
     spokes.append(place(spokes[0], [[-1, 0, 0], [0, -1, 0], [0, 0, 1]]))
     spokes.append(place(spokes[0], [[0, 1, 0], [-1, 0, 0], [0, 0, 1]]))
@@ -683,7 +690,6 @@ def build_all():
         "top_panel": panel_for_printing(build_panel()),
         "tempo_knob": build_knob("tempo"),
         "jog_knob": build_knob("jog"),
-        "encoder_washer": build_washer(),
     }
 
 
