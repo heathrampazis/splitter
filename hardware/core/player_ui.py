@@ -1,81 +1,83 @@
-from PySide6.QtCore import Qt, Signal
+"""
+The playback screen.
+
+Laid out for the 5" Touch Display 2 turned to landscape (1280 x 720),
+and it scales down for a smaller window while developing.
+
+It only shows what you need to see. Play/pause and the three stem
+buttons can be tapped on the screen as well as pressed on the hardware;
+both do exactly the same thing. Tempo and jog are only on the knobs.
+The waveform can be dragged to move through the track, ZOOM changes how
+much of it shows, and SONGS picks a track.
+
+    +--------------------------------------------------------------+
+    | Track name                           BPM 123.0  +0.0%  01:23 |
+    +--------------------------------------------------------------+
+    |                                               [ZOOM · 8 s]   |
+    |                     waveform  (drag me)                      |
+    |                                                              |
+    +--------------------------------------------------------------+
+    | [▶ PLAYING]   [VOCALS] [DRUMS] [INSTRUMENTAL]       [SONGS]  |
+    +--------------------------------------------------------------+
+"""
+
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QFontMetrics
 from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QPushButton,
-                               QSizePolicy, QSlider, QVBoxLayout, QWidget)
+                               QSizePolicy, QVBoxLayout, QWidget)
 
 import styles
 from waveform_widget import WaveformWidget
 
+# The three stem groups the buttons switch, in screen order.
+STEM_GROUPS = (
+    ("vocals", "VOCALS"),
+    ("drums", "DRUMS"),
+    ("instrumental", "INSTRUMENTAL"),
+)
 
-# One stem's volume, as a vertical fader.
-#
-# These did not exist before: stem levels were only reachable from the
-# physical encoders, which made them unusable on a bare touchscreen.
-class StemFader(QWidget):
-    changed = Signal(str, float)
 
-    def __init__(self, stem, caption, colour):
+# Tallest the waveform gets, in pixels, on the 720-pixel-high screen.
+WAVEFORM_MAX_HEIGHT = 300
+
+
+# A label that shortens long text with "…" instead of pushing the layout.
+class ElidingLabel(QLabel):
+    def __init__(self, text=""):
         super().__init__()
+        self.full_text = text
+        self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        self.setText(text)
 
-        self.stem = stem
-        self.colour = colour
+    def setText(self, text):
+        self.full_text = text
+        self.apply_elide()
 
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(4, 8, 4, 8)
-        layout.setSpacing(6)
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self.apply_elide()
 
-        self.caption = QLabel(caption)
-        self.caption.setObjectName("stemLabel")
-        self.caption.setAlignment(Qt.AlignCenter)
+    def apply_elide(self):
+        metrics = QFontMetrics(self.font())
+        super().setText(metrics.elidedText(self.full_text, Qt.ElideRight,
+                                           max(0, self.width())))
 
-        self.slider = QSlider(Qt.Vertical)
-        self.slider.setRange(0, 100)
-        self.slider.setValue(100)
-        self.slider.valueChanged.connect(self.slider_moved)
-        self.slider.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
 
-        # Each stem gets its own handle colour so the mixer can be read
-        # without pausing to study the labels.
-        self.slider.setStyleSheet(
-            "QSlider::handle:vertical {"
-            f"  background: {colour};"
-            f"  border: 1px solid {colour};"
-            "}"
-            "QSlider::sub-page:vertical {"
-            "  background: #262c33;"
-            "}"
-        )
-
-        self.value = QLabel("100")
-        self.value.setObjectName("stemValue")
-        self.value.setAlignment(Qt.AlignCenter)
-
-        layout.addWidget(self.caption)
-        layout.addWidget(self.slider, 1)
-        layout.addWidget(self.value)
-
-    def slider_moved(self, position):
-        self.value.setText(str(position))
-        self.changed.emit(self.stem, position / 100.0)
-
-    # Moves the fader without reporting it back, so an encoder turn does
-    # not echo round and fight the hardware for control.
-    def set_value(self, fraction):
-        position = int(max(0.0, min(1.0, fraction)) * 100)
-
-        self.slider.blockSignals(True)
-        self.slider.setValue(position)
-        self.slider.blockSignals(False)
-
-        self.value.setText(str(position))
+def refresh_style(widget):
+    # Qt only re-reads property-based styles when told to.
+    widget.style().unpolish(widget)
+    widget.style().polish(widget)
 
 
 class PlayerUI(QWidget):
 
     def __init__(self, app):
         super().__init__()
+
         self.app = app
-        self.faders = {}
-        self.playing = False
+        self.playing = None
+        self.stem_chips = {}
+
         self.build()
 
     # =====================================================
@@ -84,244 +86,161 @@ class PlayerUI(QWidget):
 
     def build(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(10, 0, 10, 10)
-        layout.setSpacing(8)
+        layout.setContentsMargins(16, 12, 16, 12)
+        layout.setSpacing(12)
 
-        layout.addWidget(self.build_top_bar())
-        layout.addWidget(self.build_waveform(), 1)
-        layout.addWidget(self.build_mixer())
-        layout.addLayout(self.build_transport())
+        layout.addWidget(self.build_info_bar())
 
-    # -----------------------------------------------------
-    # Track name, BPM and time
-    # -----------------------------------------------------
+        # The spare height goes evenly above and below the waveform.
+        layout.addStretch(1)
 
-    def build_top_bar(self):
+        self.waveform = WaveformWidget()
+        self.waveform.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+
+        # Kept a little short of the full height, so the touch buttons
+        # below get room for a finger.
+        self.waveform.setMaximumHeight(WAVEFORM_MAX_HEIGHT)
+        layout.addWidget(self.waveform, 3)
+
+        layout.addStretch(1)
+        layout.addWidget(self.build_status_bar())
+
+    def build_info_bar(self):
         bar = QFrame()
-        bar.setObjectName("topBar")
-        bar.setFixedHeight(54)
+        bar.setObjectName("infoBar")
 
         layout = QHBoxLayout(bar)
-        layout.setContentsMargins(6, 0, 6, 0)
-        layout.setSpacing(16)
+        layout.setContentsMargins(18, 10, 18, 10)
+        layout.setSpacing(28)
 
-        self.song_label = QLabel("NO SONG")
+        self.song_label = ElidingLabel("NO TRACK")
         self.song_label.setObjectName("songName")
 
-        self.bpm_label = QLabel("BPM ---")
+        self.bpm_label = QLabel("---.-")
         self.bpm_label.setObjectName("bpm")
+        self.bpm_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
 
-        self.time_label = QLabel("00:00 / -00:00")
+        bpm_caption = QLabel("BPM")
+        bpm_caption.setObjectName("caption")
+
+        self.tempo_label = QLabel("+0.0%")
+        self.tempo_label.setObjectName("tempo")
+        self.tempo_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+
+        self.time_label = QLabel("00:00  -00:00")
         self.time_label.setObjectName("time")
+        self.time_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
 
         layout.addWidget(self.song_label, 1)
         layout.addWidget(self.bpm_label)
+        layout.addWidget(bpm_caption)
+        layout.addWidget(self.tempo_label)
         layout.addWidget(self.time_label)
 
         return bar
 
-    def build_waveform(self):
-        self.waveform = WaveformWidget()
-        self.waveform.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.waveform.setMinimumHeight(100)
+    def build_status_bar(self):
+        bar = QFrame()
+        bar.setObjectName("statusBar")
 
-        return self.waveform
+        layout = QHBoxLayout(bar)
+        layout.setContentsMargins(14, 8, 8, 8)
+        layout.setSpacing(12)
 
-    # -----------------------------------------------------
-    # Stem faders and tempo
-    # -----------------------------------------------------
+        # Buttons act the moment a finger goes down, like the hardware
+        # ones, rather than on release.
+        self.play_state = self.touch_button("■  STOPPED", "playState", "play")
+        self.play_state.setMinimumWidth(200)
 
-    def build_mixer(self):
-        mixer = QFrame()
-        mixer.setObjectName("mixer")
-        mixer.setMinimumHeight(168)
+        layout.addWidget(self.play_state)
+        layout.addStretch(1)
 
-        layout = QHBoxLayout(mixer)
-        layout.setContentsMargins(10, 4, 10, 4)
-        layout.setSpacing(4)
+        for group, caption in STEM_GROUPS:
+            chip = self.touch_button(caption, "stemChip", group)
+            chip.setProperty("stem", group)
+            chip.setProperty("on", "true")
 
-        stems = [
-            ("vocals", "VOCALS"),
-            ("drums", "DRUMS"),
-            ("bass", "BASS"),
-            ("other", "OTHER"),
-        ]
+            self.stem_chips[group] = chip
+            layout.addWidget(chip)
 
-        for stem, caption in stems:
-            fader = StemFader(stem, caption, styles.STEM_COLOURS[stem])
-            fader.changed.connect(self.stem_changed)
-
-            self.faders[stem] = fader
-            layout.addWidget(fader, 1)
-
-        divider = QFrame()
-        divider.setFrameShape(QFrame.VLine)
-        divider.setStyleSheet(f"color:{styles.LINE};")
-        layout.addWidget(divider)
-
-        layout.addWidget(self.build_tempo(), 1)
-
-        return mixer
-
-    def build_tempo(self):
-        column = QWidget()
-
-        layout = QVBoxLayout(column)
-        layout.setContentsMargins(4, 8, 4, 8)
-        layout.setSpacing(6)
-
-        caption = QLabel("TEMPO")
-        caption.setObjectName("stemLabel")
-        caption.setAlignment(Qt.AlignCenter)
-
-        self.tempo_slider = QSlider(Qt.Vertical)
-        self.tempo_slider.setRange(-80, 80)
-        self.tempo_slider.setValue(0)
-
-        # Plus at the bottom, minus at the top. That is how every CDJ and
-        # turntable is laid out, and the screen should not disagree with
-        # a physical fader wired in later.
-        self.tempo_slider.setInvertedAppearance(True)
-        self.tempo_slider.valueChanged.connect(self.app.change_tempo)
-        self.tempo_slider.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
-
-        self.tempo_label = QLabel("0.0%")
-        self.tempo_label.setObjectName("tempoValue")
-        self.tempo_label.setAlignment(Qt.AlignCenter)
-
-        layout.addWidget(caption)
-        layout.addWidget(self.tempo_slider, 1)
-        layout.addWidget(self.tempo_label)
-
-        return column
-
-    # -----------------------------------------------------
-    # Transport
-    # -----------------------------------------------------
-
-    def build_transport(self):
-        layout = QHBoxLayout()
-        layout.setSpacing(8)
-
-        rewind = QPushButton("◀◀")
-        rewind.pressed.connect(lambda: self.app.engine.start_search(-1))
-        rewind.released.connect(self.app.engine.stop_search)
-
-        # Playback used to be reachable only from a physical button.
-        self.play_button = QPushButton("▶  PLAY")
-        self.play_button.setObjectName("playButton")
-        self.play_button.clicked.connect(self.app.engine.toggle_play)
-
-        forward = QPushButton("▶▶")
-        forward.pressed.connect(lambda: self.app.engine.start_search(1))
-        forward.released.connect(self.app.engine.stop_search)
-
-        zoom = QPushButton("ZOOM")
-        zoom.clicked.connect(self.toggle_zoom)
+        layout.addStretch(1)
 
         songs = QPushButton("SONGS")
+        songs.setObjectName("songsButton")
+        songs.setFocusPolicy(Qt.NoFocus)
         songs.clicked.connect(self.app.show_selection_page)
+        layout.addWidget(songs)
 
-        layout.addWidget(rewind, 2)
-        layout.addWidget(self.play_button, 3)
-        layout.addWidget(forward, 2)
-        layout.addWidget(zoom, 2)
-        layout.addWidget(songs, 2)
+        return bar
 
-        return layout
-
-    # =====================================================
-    # CONTROL HANDLERS
-    # =====================================================
-
-    def stem_changed(self, stem, value):
-        self.app.engine.set_volume(stem, value)
-
-    # Called by the encoders so the on-screen fader follows the knob.
-    def set_stem_value(self, stem, value):
-        fader = self.faders.get(stem)
-
-        if fader:
-            fader.set_value(value)
-
-    # Keeps the play button honest whichever control started playback.
-    def set_playing(self, playing):
-        if playing == self.playing:
-            return
-
-        self.playing = playing
-
-        self.play_button.setText("❚❚  PAUSE" if playing else "▶  PLAY")
-        self.play_button.setProperty("playing", "true" if playing else "false")
-        self.play_button.style().unpolish(self.play_button)
-        self.play_button.style().polish(self.play_button)
+    def touch_button(self, text, object_name, control):
+        button = QPushButton(text)
+        button.setObjectName(object_name)
+        button.setFocusPolicy(Qt.NoFocus)
+        button.pressed.connect(lambda: self.app.handle_button(control, True))
+        button.released.connect(lambda: self.app.handle_button(control, False))
+        return button
 
     # =====================================================
-    # ZOOM
-    # =====================================================
-
-    def toggle_zoom(self):
-        current = self.waveform.zoom_level()
-
-        if current == "overview":
-            self.waveform.zoom_in()
-        elif current == "medium":
-            self.waveform.zoom_in()
-        else:
-            self.waveform.zoom_out()
-            self.waveform.zoom_out()
-
-        self.app.update_search_sensitivity()
-
-    # =====================================================
-    # DISPLAY HELPERS
+    # DISPLAY
     # =====================================================
 
     def set_song_name(self, name):
         self.song_label.setText(name)
 
     def set_bpm(self, bpm):
-        self.bpm_label.setText(f"BPM {float(bpm):.1f}")
+        bpm = float(bpm or 0)
+        self.bpm_label.setText(f"{bpm:.1f}" if bpm > 0 else "---.-")
+
+    def set_tempo(self, percent):
+        self.tempo_label.setText(f"{percent:+.1f}%")
 
     def set_time(self, current, remaining):
         self.time_label.setText(
-            f"{self.format_time(current)} / -{self.format_time(remaining)}"
-        )
+            f"{self.format_time(current)}  -{self.format_time(remaining)}")
 
     def set_progress(self, progress):
         self.waveform.set_progress(progress)
 
-    def set_tempo_label(self, tempo):
-        self.tempo_label.setText(f"{tempo:+.1f}%")
+    def set_playing(self, playing, loaded=True):
+        state = "playing" if playing else ("paused" if loaded else "stopped")
 
-    def reset_tempo(self):
-        self.tempo_slider.blockSignals(True)
-        self.tempo_slider.setValue(0)
-        self.tempo_slider.blockSignals(False)
+        if state == self.playing:
+            return
 
-        self.app.engine.set_tempo(0)
-        self.tempo_label.setText("0.0%")
+        self.playing = state
 
-    # Returns every fader to full, which is the state a new track starts in.
-    #
-    # The engine is reset too. The faders are moved with their signals
-    # blocked, so without this the screen would show 100 while the engine
-    # kept the last track's levels, and the next encoder turn would jump.
-    def reset_stems(self):
-        for stem, fader in self.faders.items():
-            fader.set_value(1.0)
-            self.app.engine.set_volume(stem, 1.0)
+        text = {"playing": "▶  PLAYING", "paused": "❚❚  PAUSED",
+                "stopped": "■  STOPPED"}[state]
 
-    def load_waveforms(self, folder):
-        self.waveform.load_waveforms(folder)
+        self.play_state.setText(text)
+        self.play_state.setProperty("state", state)
+        refresh_style(self.play_state)
 
-    # =====================================================
-    # TIME
-    # =====================================================
+    def set_stem(self, group, on):
+        chip = self.stem_chips.get(group)
+
+        if chip is None:
+            return
+
+        chip.setProperty("on", "true" if on else "false")
+        refresh_style(chip)
+
+    def load_waveforms(self, folder, duration):
+        self.waveform.load_waveforms(folder, duration)
+
+    def clear(self):
+        self.set_song_name("NO TRACK")
+        self.set_bpm(0)
+        self.set_tempo(0)
+        self.set_time(0, 0)
+        self.set_playing(False, loaded=False)
+        self.waveform.clear()
+
+        for group, _ in STEM_GROUPS:
+            self.set_stem(group, True)
 
     @staticmethod
     def format_time(seconds):
-        minutes = int(seconds // 60)
-        seconds = int(seconds % 60)
-
-        return f"{minutes:02}:{seconds:02}"
+        seconds = max(0, int(seconds))
+        return f"{seconds // 60:02}:{seconds % 60:02}"

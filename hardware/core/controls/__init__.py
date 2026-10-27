@@ -1,46 +1,59 @@
 """
-Physical controls, kept optional.
+Physical controls.
 
-The player is touch-first: it runs on a bare Raspberry Pi with nothing
-but a screen attached. Buttons and encoders are an upgrade. They are
-wired to a Raspberry Pi Pico 2 W, which plugs into the Pi over USB and
-sends everything as MIDI (see hardware/firmware/ and the README). When
-it is plugged in, it drives the same audio engine the on-screen controls
-do, so the two stay in step.
+The buttons and encoders are wired to the Raspberry Pi's GPIO header
+(gpio_controls.py). A USB MIDI controller can be used as well
+(midi_controls.py), which also makes it possible to try the player on a
+laptop. Both send the same actions to the main window:
 
-Nothing here is required for the app to work. If the MIDI library is
-missing, attach() reports why and returns None, and the player carries
-on as a touch device. The Pico itself can be plugged in or pulled out at
-any time while the player is running.
+    handle_button(name, pressed)   play, vocals, drums, instrumental
+    handle_turn(name, steps)       tempo, jog
+
+Nothing here is required for the player to start. If a kind of control
+cannot be set up - no GPIO on a laptop, no MIDI library - attach() says
+why and carries on without it.
 """
 
-# "auto"  - use the Pico whenever it is plugged in, touch otherwise
-# "midi"  - require the MIDI library, fail loudly if it is missing
-# "touch" - ignore the Pico even when it is plugged in
-MODE = "auto"
+# Set either to False to switch that kind of control off.
+USE_GPIO = True
+USE_MIDI = True
 
 
-# Starts listening for the Pico, if controls are enabled.
-#
-# Returns a MidiControls object, or None when running touch-only.
+class Controls:
+    def __init__(self, parts):
+        self.parts = parts
+
+    def close(self):
+        for part in self.parts:
+            try:
+                part.close()
+            except Exception:
+                pass
+
+
 def attach(app):
-    if MODE == "touch":
-        print("Controls: touch only (disabled in controls/__init__.py)")
-        return None
+    parts = []
 
-    try:
-        from controls.midi_controls import MidiControls
+    if USE_GPIO:
+        try:
+            from controls.gpio_controls import GPIOControls
 
-        controls = MidiControls(app)
+            parts.append(GPIOControls(app))
 
-    except Exception as e:
-        if MODE == "midi":
-            print("Controls: required but unavailable.")
-            raise
+        except Exception as e:
+            # The normal case on a laptop: there is no GPIO header.
+            print(f"Controls: no GPIO ({type(e).__name__}: {e})")
 
-        # Normally means mido or python-rtmidi is not installed. Not an
-        # error for a touch-only build, so say what happened and move on.
-        print(f"Controls: touch only ({type(e).__name__}: {e})")
-        return None
+    if USE_MIDI:
+        try:
+            from controls.midi_controls import MidiControls
 
-    return controls
+            parts.append(MidiControls(app))
+
+        except Exception as e:
+            print(f"Controls: no MIDI ({type(e).__name__}: {e})")
+
+    if not parts:
+        print("Controls: touch screen only")
+
+    return Controls(parts)

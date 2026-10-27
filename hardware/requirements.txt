@@ -1,4 +1,6 @@
 PySide6
+gpiozero
+lgpio
 mido
 python-rtmidi
 sounddevice
