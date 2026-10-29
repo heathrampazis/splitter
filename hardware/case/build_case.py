@@ -34,7 +34,7 @@ import numpy as np
 # --- Overall box -----------------------------------------------------
 
 CASE_W = 176.0        # left to right
-CASE_D = 174.0        # front to back
+CASE_D = 184.0        # front to back
 CASE_H = 50.0         # base height, floor bottom to wall top
 WALL = 2.4            # wall thickness
 FLOOR = 2.4           # floor thickness
@@ -51,14 +51,21 @@ PANEL = 2.5           # top panel thickness. EC11 bushings are short,
 
 SCREEN_W = 143.5      # outline, left to right
 SCREEN_D = 91.5       # outline, front to back
-SCREEN_FIT = 1.5      # gap round the screen in its recess, each side
-SCREEN_Y = 72.0       # front edge of the recess, from case front
+SCREEN_FIT = 2.0      # gap round the screen in its recess, each side
+SCREEN_Y = 81.0       # front edge of the recess, from case front
 SCREEN_SINK = 5.5     # how far the screen sits down into the lid; the
                       # glass part is about 6.6 mm thick, so it stands
                       # about 1 mm proud
-RECESS_WALL = 2.0     # walls of the recess, under the lid
+RECESS_WALL = 1.6     # walls of the recess, under the lid
 CORNER_SHELF = 14.0   # the corner shelves the screen rests on (each leg)
+SCREEN_LEDGE = 4.0    # ledge all round the recess, out from its walls:
+                      # with the 2 mm gap that is about 2 mm under the
+                      # screen's edge, and the middle stays open for its back
 SHELF_THICK = 1.6
+# Optional gaps in the recess's front wall (and its ledge) behind the
+# three stem buttons, whose plugs point at the screen. Not needed with the
+# box at 184 mm deep: there is about 8 mm of open space behind the plugs.
+CABLE_NOTCH = 0.0
 
 # --- Controls ------------------------------------------------------------
 #
@@ -76,19 +83,21 @@ SHELF_THICK = 1.6
 # Positions are the centre of each hole, measured from the case's front
 # left corner.
 
-ENCODER_HOLE = 8.5    # the EC11's threaded neck is M7, so 0.75 mm spare all
-                      # round, while its own nut (about 9.5 mm across) still
-                      # clamps on the lid. Bigger needs a washer: see
-                      # WASHER_OD below and build_washer().
-ENCODERS = {"tempo": (150.0, 52.0), "jog": (120.0, 25.0)}
+ENCODER_HOLE = 11.0   # the EC11's threaded neck is M7, so 2 mm of room all
+                      # round, the same as the buttons get round their caps.
+                      # That is wider than its nut, so the nut is
+                      # optional: the pillar and glue underneath hold the
+                      # encoder. A washer of 13 mm or more under the nut
+                      # lets it clamp as well.
+ENCODERS = {"tempo": (158.0, 52.0), "jog": (124.0, 28.0)}
 
 BUTTON_HOLE = 16.5    # the module's own cap pokes through: 11.2 mm top,
                       # 12.5 mm collar, so 2 mm spare all round
 BUTTONS = {
     "play": (28.0, 19.0),
-    "vocals": (30.0, 48.0),
-    "drums": (62.0, 48.0),
-    "instrumental": (94.0, 48.0),
+    "vocals": (28.0, 48.0),
+    "drums": (58.0, 48.0),
+    "instrumental": (88.0, 48.0),
 }
 
 # --- EC11 encoder modules ("Rotary Encoder Module for Arduino") ---------
@@ -116,10 +125,10 @@ ENC_RAILS = {"tempo": (-12.0, 12.0), "jog": (-9.0, 12.0)}
 # of the board, away from the plug.
 #
 # The yellow cap pokes up through the lid by itself - no printed cap. An
-# open frame under each hole holds the board; push it up until the cap
-# stands proud as far as you like (about 3 mm puts the board 6.5 mm under
-# the lid, and the plug still clears it) and hot glue the board's edges
-# to the frame. A gap in the end wall lets the cable out.
+# open frame under each hole lines the board up, and it is glued onto a
+# pillar in the base (see "Pillars" below) at the height that leaves the
+# cap standing BUTTON_PROUD above the lid. The plug still clears the lid.
+# A gap in the frame's end wall lets the cable out.
 
 MODULE_W = 22.0       # board size
 MODULE_L = 30.0
@@ -127,7 +136,10 @@ SWITCH_OFFSET = 3.2   # switch centre from board centre, away from the plug
 MODULE_FIT = 1.0      # gap around the board, each side
 MODULE_WALL = 1.6
 MODULE_DEPTH = 10.0   # how far the frame hangs below the panel
-MODULE_GAP = 12.0     # width of the cable gap, for the plug and its wires
+MODULE_GAP = 14.0     # width of the cable gap, for the plug and its wires
+CAP_HEIGHT = 11.7     # board's top face to the top of its cap. Measure
+                      # yours: it sets the height of the button pillars.
+BUTTON_PROUD = 2.5    # how far the cap stands above the lid
 # Which way each board's long side runs, with the plug at the far end:
 # "x" plug to the right, "y" plug to the back. Play lies sideways so it
 # clears the vocals board above it.
@@ -161,6 +173,36 @@ SNAPS = {
 }
 FINGER_NOTCH = (24.0, 3.0)   # width and depth, top of the front wall
 
+# --- Pillars under the buttons and encoders -------------------------------
+# A hollow pillar rises from the floor of the base under each board, the
+# same shape as the board: a rectangle under each button, a round tube
+# under each encoder. Its rim meets the board's edge, so everything on
+# the underside (switch legs, solder joints) sits in the hollow middle.
+# The encoder tubes have a slot on the pin side for the jumper plugs.
+# Glue the boards onto the rims, so pressing a button (or the tempo knob)
+# pushes straight down through the pillar to the floor.
+#
+# Heights: each rim stops PILLAR_GAP short of where the board's
+# underside is when the lid is on, leaving room for the glue.
+#   button board underside = top of the lid + BUTTON_PROUD - CAP_HEIGHT
+#                             - 1.6 (the board)
+#   encoder board underside = lid underside - ENC_BOARD_DOWN
+
+PILLAR_WALL = 2.0         # rim width: a good strip to glue onto
+PILLAR_GAP = 0.5          # glue gap between each rim and its board
+PILLAR_INSET = 2.0        # rims sit this far inside each board's edge,
+                          # so there's board over them even if yours
+                          # turn out a little smaller
+ENC_BOARD_D = 25.0        # the round encoder board, across
+ENC_BOARD_DOWN = 9.5      # the board's underside below the lid's
+                          # underside: EC11 body 6.5 + its base 1.4 +
+                          # the board 1.6. Measure yours: from the top of
+                          # the metal body to the bottom of the board.
+ENC_SLOT = 15.0           # slot width on the pin side: clears all five
+                          # pins (10.8 mm) and the three jumper plugs used
+                          # (GND, S1, S2), while the pillar still wraps about
+                          # three quarters of the way round the board
+
 # --- Raspberry Pi 5 on the floor ------------------------------------------
 #
 # Under the screen, at the back left, turned so the USB-C and HDMI ports
@@ -170,7 +212,7 @@ FINGER_NOTCH = (24.0, 3.0)   # width and depth, top of the front wall
 PI_W = 85.0           # board, left to right (USB end on the left)
 PI_D = 56.0           # board, front to back
 PI_X = 12.0           # board's left edge, from the case's left edge
-PI_Y = 106.0          # board's front edge, from the case front
+PI_Y = 116.0          # board's front edge, from the case front
 PI_STANDOFF = 5.0     # height of the posts under the board
 PI_POST_D = 6.0
 PI_PILOT = 2.2        # for the M2.5 screws that came with the display
@@ -207,9 +249,14 @@ KNOBS = {
 # instead of resting on the lid. (The EC11's shaft stands about 17 mm
 # above the lid: 4.5 mm of threaded neck, then the knurled part.)
 KNOB_BORE = 9.0
-SHAFT_D = 6.0         # round hole that presses onto the knurled, split
-                      # 6 mm shaft (printed holes come out a little small,
-                      # which makes it grip). Loose? Try 5.8. Too tight? 6.2.
+# The shaft hole is a split, springy sleeve, standing free of the rest of
+# the knob (attached only at the top), so it hugs the knurled shaft even
+# if the print comes out a little big or small.
+SHAFT_D = 5.8         # sleeve's inside; it opens up onto the 6 mm shaft.
+                      # Loose? Try 5.6. Won't go on? 6.0.
+SLEEVE_OD = 9.0       # sleeve's outside
+SLEEVE_GAP = 1.0      # gap round the sleeve
+SLEEVE_SLIT = 0.8     # two slits down the sleeve
 JOG_DIMPLE = 7.0      # finger dimple near the jog wheel's edge
 
 # --- Encoder washer (not printed by default) -----------------------------
@@ -467,6 +514,12 @@ def build_base():
     for side, (a0, a1) in SNAPS.items() if SNAP > 0 else ():
         parts.append(wall_strip(side, ridge, a0, a1))
 
+    # Pillars under the button and encoder boards.
+    for name in BUTTONS:
+        parts.append(button_pillar(name))
+    for name in ENCODERS:
+        parts.append(encoder_pillar(name))
+
     # Posts for the Pi. Its USB end is on the left, so the holes are
     # measured from the right-hand end of the board.
     for hx, hy in pi_holes():
@@ -492,6 +545,39 @@ def wall_strip(side, profile, a0, a1):
     return place(extrude([pts], a1 - a0), XZ_WALL, (0, a0, 0))
 
 
+def button_pillar(name):
+    """Hollow rectangle the shape of the button's board."""
+    bx, by = BUTTONS[name]
+    i = PILLAR_INSET
+    hl, hw = MODULE_L / 2 - i, MODULE_W / 2 - i
+
+    if MODULE_ALONG[name] == "x":
+        ox = bx + SWITCH_OFFSET
+        x0, x1, y0, y1 = ox - hl, ox + hl, by - hw, by + hw
+    else:
+        oy = by + SWITCH_OFFSET
+        x0, x1, y0, y1 = bx - hw, bx + hw, oy - hl, oy + hl
+
+    top = CASE_H + PANEL + BUTTON_PROUD - CAP_HEIGHT - 1.6 - PILLAR_GAP
+    w = PILLAR_WALL
+    return prism([rect(x0, y0, x1, y1), rect(x0 + w, y0 + w, x1 - w, y1 - w)],
+                 FLOOR - 0.2, top)
+
+
+def encoder_pillar(name):
+    """Round tube the shape of the encoder's board, with a slot on the
+    side its pins and plugs are (tempo's point left, jog's right)."""
+    ex, ey = ENCODERS[name]
+    r_out = ENC_BOARD_D / 2 - PILLAR_INSET
+    r_in = r_out - PILLAR_WALL
+    pins = math.pi if name == "tempo" else 0.0
+    half = math.asin(min(1.0, ENC_SLOT / 2 / r_out))
+    ring = [(ex + x, ey + y) for x, y in
+            arc_ring(r_in, r_out, pins + half, pins + 2 * math.pi - half, 48)]
+    top = CASE_H - ENC_BOARD_DOWN - PILLAR_GAP
+    return prism([ring], FLOOR - 0.2, top)
+
+
 def pi_holes():
     right = PI_X + PI_W
     return [(right - dx, PI_Y + dy) for dx, dy in PI_HOLES]
@@ -515,14 +601,36 @@ def build_panel():
 
     parts.append(prism([rect(0, 0, W, D)] + holes, H, top))
 
-    # The screen recess: walls hanging under the opening, with a shelf in
-    # each corner for the screen to rest on. The shelves span the corner
-    # between two walls, so they print as short bridges.
+    # The screen recess: walls hanging under the opening, a narrow ledge
+    # all the way round for the screen's edge to sit on, and a bigger
+    # triangular shelf in each corner. Printed face down the ledge is a
+    # short overhang off the wall and the shelves are short bridges, so
+    # neither needs supports.
     shelf_top = top - SCREEN_SINK
     z0 = shelf_top - SHELF_THICK
     t = RECESS_WALL
-    parts.append(prism([rect(px0 - t, py0 - t, px1 + t, py1 + t),
-                        rect(px0, py0, px1, py1)], z0, H + 0.5))
+    notches = (sorted(BUTTONS[n][0] for n in BUTTONS if MODULE_ALONG[n] == "y")
+               if CABLE_NOTCH > 0 else [])
+
+    def front_pieces(xa, xb):
+        """x ranges along the front, between xa and xb, minus the notches."""
+        out, x = [], xa
+        for nx in notches:
+            n0, n1 = nx - CABLE_NOTCH / 2, nx + CABLE_NOTCH / 2
+            if n1 <= x or n0 >= xb:
+                continue
+            if n0 > x:
+                out.append((x, n0))
+            x = max(x, n1)
+        if x < xb:
+            out.append((x, xb))
+        return out
+
+    for a, b in front_pieces(px0 - t, px1 + t):
+        parts.append(box(a, py0 - t, z0, b, py0, H + 0.5))       # front wall
+    parts.append(box(px0 - t, py1, z0, px1 + t, py1 + t, H + 0.5))   # back
+    parts.append(box(px0 - t, py0 - t, z0, px0, py1 + t, H + 0.5))   # left
+    parts.append(box(px1, py0 - t, z0, px1 + t, py1 + t, H + 0.5))   # right
 
     c = CORNER_SHELF
     for (cx, cy, dx, dy) in ((px0, py0, 1, 1), (px1, py0, -1, 1),
@@ -530,6 +638,13 @@ def build_panel():
         tri = [(cx - dx * 0.5, cy - dy * 0.5), (cx + dx * c, cy - dy * 0.5),
                (cx - dx * 0.5, cy + dy * c)]
         parts.append(prism([tri], z0, shelf_top))
+
+    e = SCREEN_LEDGE
+    for a, b in front_pieces(px0 - 0.2, px1 + 0.2):
+        parts.append(box(a, py0 - 0.2, z0, b, py0 + e, shelf_top))   # front ledge
+    parts.append(box(px0 - 0.2, py1 - e, z0, px1 + 0.2, py1 + 0.2, shelf_top))
+    parts.append(box(px0 - 0.2, py0 + e, z0, px0 + e, py1 - e, shelf_top))
+    parts.append(box(px1 - e, py0 + e, z0, px1 + 0.2, py1 - e, shelf_top))
 
     # Rails that stop the encoder boards twisting.
     for name, (ex, ey) in ENCODERS.items():
@@ -637,18 +752,36 @@ def knob_outline(diameter, flutes):
     return pts
 
 
+def arc_ring(r_in, r_out, a0, a1, n=24):
+    outer = [(r_out * math.cos(a0 + (a1 - a0) * i / n),
+              r_out * math.sin(a0 + (a1 - a0) * i / n)) for i in range(n + 1)]
+    inner = [(r_in * math.cos(a1 - (a1 - a0) * i / n),
+              r_in * math.sin(a1 - (a1 - a0) * i / n)) for i in range(n + 1)]
+    return outer + inner
+
+
+def sleeve(z0, z1):
+    """The split sleeve that grips the shaft: two half rings."""
+    r_in, r_out = SHAFT_D / 2, SLEEVE_OD / 2
+    half = math.asin(SLEEVE_SLIT / 2 / r_in)
+    return np.concatenate([
+        prism([arc_ring(r_in, r_out, half, math.pi - half)], z0, z1),
+        prism([arc_ring(r_in, r_out, math.pi + half, 2 * math.pi - half)], z0, z1),
+    ])
+
+
 def build_knob(name):
     # Printed top-down: solid top on the bed, shaft hole facing up.
     diameter, height, flutes = KNOBS[name]
     outline = knob_outline(diameter, flutes)
-    shaft = circle(0, 0, SHAFT_D / 2, 48)
+    pocket = circle(0, 0, SLEEVE_OD / 2 + SLEEVE_GAP, 48)
 
     top_t = height - KNOB_BORE           # solid top above the shaft hole
 
     if name != "jog":
         cap = prism([outline], 0, top_t + 0.3)
-        body = prism([outline, shaft], top_t, height)
-        return np.concatenate([cap, body])
+        body = prism([outline, pocket], top_t, height)
+        return np.concatenate([cap, body, sleeve(top_t - 0.2, height)])
 
     # The jog wheel: a shallow finger dimple near the edge (printed as a
     # recess in the top face, which is on the bed), a solid top, then a
@@ -658,9 +791,10 @@ def build_knob(name):
     dimple = circle(0, -(r - JOG_DIMPLE / 2 - 4.0), JOG_DIMPLE / 2, 32)
     face = prism([outline, dimple], 0, 1.2)
     top = prism([outline], 1.0, top_t + 0.3)
-    hub = prism([circle(0, 0, 6.0, 48), shaft], top_t, height)
+    hub = sleeve(top_t - 0.2, height)
     rim = prism([outline, circle(0, 0, r - 2.6, 96)], top_t, height)
-    spokes = [box(-1.2, 5.5, top_t, 1.2, r - 2.2, height - 2.0)]
+    s0 = SLEEVE_OD / 2 + SLEEVE_GAP
+    spokes = [box(-1.2, s0, top_t, 1.2, r - 2.2, height - 2.0)]
     spokes.append(place(spokes[0], [[0, -1, 0], [1, 0, 0], [0, 0, 1]]))
     spokes.append(place(spokes[0], [[-1, 0, 0], [0, -1, 0], [0, 0, 1]]))
     spokes.append(place(spokes[0], [[0, 1, 0], [-1, 0, 0], [0, 0, 1]]))

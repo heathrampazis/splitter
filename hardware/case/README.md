@@ -23,7 +23,7 @@ the encoders' own nuts.
                   front
 ```
 
-Outside size: **176 × 174 × 52.5 mm**; the screen's glass stands about 1 mm above the lid. Every part fits on a 180 mm bed.
+Outside size: **176 × 184 × 52.5 mm**; the screen's glass stands about 1 mm above the lid. The base and lid need a print bed of at least 185 mm each way (a common 220 mm bed is fine).
 
 ![Exploded](preview/assembly_exploded.png)
 
@@ -45,13 +45,14 @@ rails are only 1.4-1.6 mm thick, and the knobs need solid walls round
 the shaft. Brim on the base if your printer is prone to warping
 corners.
 
-Both knobs have a plain round 6 mm hole, 9 mm deep and closed at the
-top. It pushes onto the encoders' knurled, split shaft - the knurls bite
-into the plastic and the split springs it tight - until the shaft's end
-meets the top of the hole. That leaves the knob riding about 4 mm above
-the nut, so it never rubs the lid. If a knob is loose, change `SHAFT_D`
-in `build_case.py` to 5.8; if it won't go on, 6.2. Then rebuild and
-reprint just that knob.
+Each knob's shaft hole is a split, springy sleeve, standing free of the
+rest of the knob, so it hugs the knurled shaft even if the print comes
+out a little big or small. It is 9 mm deep and closed at the top: the
+knob pushes on until the shaft's end meets the top, which leaves it
+riding about 4 mm above the nut, clear of the lid. If a knob is loose,
+change `SHAFT_D` in `build_case.py` from 5.8 to 5.6; if it won't go on,
+6.0. Then rebuild and reprint just that knob. For a knob that will never
+come off, put a drop of superglue in the hole first.
 
 `stl/knob.stl`, `stl/screen_frame.stl`, `stl/button_cap.stl`,
 `stl/encoder_washer.stl`, `preview/knob.png` and
@@ -83,34 +84,50 @@ any more; delete them.
 3. **Screen.** Plug the display's ribbon (the 22-way to 15-way cable for
    the Pi 5) and its power wires (pins 2 and 6) into the display. Feed
    them down through the screen recess in the lid. Lower the display into
-   the recess, glass up, until it sits on the four corner shelves. It is
-   a loose fit on purpose (1.5 mm spare each side); a dab of hot glue in two corners stops it
+   the recess, glass up, until it sits on the ledge that runs round the
+   inside and the four triangular corner shelves. It is
+   a loose fit on purpose (2 mm spare each side); a dab of hot glue in two corners stops it
    moving. Plug the ribbon and power wires into the Pi.
-4. **Encoders.** Both are the same EC11 "Rotary Encoder Module for
-   Arduino". Take the nut off, push the shaft up through its hole from
-   underneath so the round board drops between the two rails, and
-   tighten the nut on top of the lid (over its metal washer, if it came
-   with one). The holes are 8.5 mm, a little looser than the 7 mm neck
-   but small enough for the nut to clamp. Lay the boards left-right: **tempo with its pins
-   pointing left**, **jog with its pins pointing right**. If the encoder
-   has a small anti-rotation tab next to the bushing, snip it off with
-   side cutters, or it will not sit flat.
-5. **Buttons.** These are DFRobot Digital Push Button V2 modules, and
-   their own coloured caps are the buttons - nothing to print. Push each
-   module up into the frame under its hole, cap first, with the
-   white plug towards the gap in the frame wall (towards the back, or to
-   the right for play). Push it up until the cap stands about
-   3 mm above the lid, so it is easy to press but its collar is still
-   just below the surface, then hot glue the board's edges to the frame
-   walls. The board ends up about 6.5 mm under the lid, and the side
-   plug (about 5 mm tall) still clears it. Press the button a few times
-   before the glue sets to check it clicks and doesn't rub the hole.
+4. **Buttons and encoders onto their pillars.** The base has a hollow
+   pillar under each button and each encoder, the same shape as its
+   board but a little smaller, so its thin rim is always under the board:
+   a rectangle for each button, a round tube for each encoder (with a
+   slot on the side its pins and plugs are). Anything sticking out of a
+   board's underside sits in the hollow middle. The boards are
+   glued on top of them, so every press - a button, or the tempo knob -
+   pushes straight down through a pillar to the floor.
+   1. Put a blob of hot glue on top of each pillar.
+   2. Stand each board on its pillar: the button modules cap up, with
+      the white plug towards the back (to the right for play), and the
+      encoders shaft up, **tempo with its pins pointing left** and **jog
+      with its pins pointing right**. If an encoder has a small
+      anti-rotation tab next to its threaded neck, snip it off first.
+   3. While the glue is still soft, lower the lid on. The button caps
+      and encoder shafts come up through their holes, and the frames and
+      rails under the lid nudge each board into exactly the right spot.
+      Hold the lid down for a minute while the glue sets.
+   4. The nuts are optional: the holes are 11 mm, roomy round the 7 mm
+      neck and wider than the nut, and the pillars and glue hold the
+      encoders. To clamp them as well, put a washer of 13 mm or more
+      over each neck on top of the lid and screw the nut down on it.
+
+   The pillars stop 0.5 mm under the boards, which the glue fills. Their
+   heights come from two measurements in the table below - check them
+   on your parts first, because they decide how high everything sits.
+   The button caps stand about 2.5 mm above the lid. To take the lid off
+   later, unscrew the two encoder nuts first; the boards stay on their
+   pillars.
+   The three stem buttons' plugs point back towards the screen. There
+   are about 8 mm of open space between them and the screen's recess,
+   so their wires can bend straight down and back to the Pi.
+5. **Check them.** Press each button and the tempo knob, and turn both
+   encoders, with `./scripts/test_controls.py` running.
 6. **Tidy the wires.** Bundle the jumper wires with a cable tie or a dab
    of glue so they don't catch on the encoders or the Pi's fan.
-7. **Close it up.** Lower the lid onto the base. The lip on its
-   underside drops just inside the walls (its bottom edge is chamfered,
-   so it finds its own way in) and the lid rests on the top of the walls.
-   To lift it off, use the finger notch in the middle of the front edge.
+7. **The lid.** It went on in step 4. Its lip drops just inside the
+   walls (the bottom edge is chamfered, so it finds its own way in) and
+   it rests on top of the walls. To lift it off, unscrew the two encoder
+   nuts and lift at the finger notch in the middle of the front edge.
 8. **Knobs.** Push the printed jog wheel onto the encoder at the front
    and the small knob onto tempo, until each stops on the end of its
    shaft. Give each a spin: it should turn freely, clear of the lid.
@@ -135,13 +152,17 @@ or calipers before printing saves a reprint:
 | Display glass part, front to back of its edge | `SCREEN_SINK` sets how deep it sits | sits 5.5 mm down |
 | Button module board                | `MODULE_W`, `MODULE_L`            | 22 × 30 mm (DFR0029) |
 | Encoder board, across              | `ENC_BOARD_W`                     | rails take boards up to 28 mm across |
-| Encoder threaded neck              | `ENCODER_HOLE`                    | 8.5 mm hole for the M7 neck; the nut clamps round it |
-| Encoder shaft                      | `SHAFT_D`, `KNOB_BORE`            | 6 mm knurled, split; knob hole 6.0 mm, 9 mm deep |
+| Encoder threaded neck              | `ENCODER_HOLE`                    | 11 mm hole for the M7 neck: 2 mm of room each side, like the buttons |
+| Encoder shaft                      | `SHAFT_D`, `KNOB_BORE`            | 6 mm knurled, split; knob sleeve 5.8 mm, 9 mm deep |
 | DFR0029 yellow cap                 | `BUTTON_HOLE`                     | 16.5 mm hole for the 12.5 mm collar |
 | DFR0029 switch position            | `SWITCH_OFFSET`                   | 3.2 mm from the board's middle, away from the plug |
+| Button pillar height: board's top to the top of its cap | `CAP_HEIGHT` | 11.7 mm |
+| Encoder pillar height: top of the encoder's metal body to the bottom of its board | `ENC_BOARD_DOWN` | 9.5 mm |
+| Encoder board, across              | `ENC_BOARD_D`                     | 25 mm |
 
-The screen rests on four triangular corner shelves, 14 mm along each
-edge (`CORNER_SHELF`), so the middle of its back is free. It is 16 mm
+The screen rests on a 4 mm ledge all round the recess (`SCREEN_LEDGE`)
+and four triangular corner shelves, 14 mm along each edge
+(`CORNER_SHELF`), so the middle of its back is free. It is 16 mm
 deep, so its back hangs about 10 mm into the box, well clear of the Pi
 (about 20 mm of room is left for the jumper wires on the GPIO pins). If
 the glass sits too low or too high, change `SCREEN_SINK`.
@@ -154,9 +175,9 @@ shut instead, set `SNAP` to 0.5 and rebuild to add clips.
 The port openings are generous. If a plug still fouls, widen
 `POWER_HOLE_W` or `LEFT_NOTCH_Y`, or move the Pi with `PI_X` and `PI_Y`.
 
-There is deliberately some play everywhere: 1.5 mm round the screen in
+There is deliberately some play everywhere: 2 mm round the screen in
 its recess, 16.5 mm button holes round the 12.5 mm caps, 1 mm round
-each button board in its frame, and 8.5 mm encoder holes round the
+each button board in its frame, and 11 mm encoder holes round the
 7 mm necks. A little of the boards may show
 through the gaps; that is expected.
 
